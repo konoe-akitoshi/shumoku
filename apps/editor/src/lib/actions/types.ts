@@ -11,7 +11,7 @@
 // fits their affordance (icon button vs menu item vs keystroke
 // match), and call `run(ctx)` when the user picks one.
 
-import type { NodeShape, NodeSpec } from '@shumoku/core'
+import type { NodeSpec } from '@shumoku/core'
 import type { Component } from 'svelte'
 
 /** Where the user invoked the action. Drives `when` / `enabled`. */
@@ -62,7 +62,6 @@ export interface RendererHandle {
   getElementInfo(id: string): {
     kind: 'node' | 'subgraph'
     label: string | string[]
-    shape?: NodeShape
     spec?: NodeSpec
   } | null
   /** Convert a screen-space (clientX/Y) point to SVG-space coords. */
@@ -71,7 +70,6 @@ export interface RendererHandle {
   addNewNode(init: {
     id: string
     label?: string
-    shape?: NodeShape
     spec?: NodeSpec
     position?: { x: number; y: number }
   }): void

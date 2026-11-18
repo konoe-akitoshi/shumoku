@@ -9,7 +9,6 @@
 
 import { type Link, type Node, resolveIcon } from '@shumoku/core'
 import { captionContent, type NodeContent, nodeContent } from './content.js'
-import { shapeOf } from './node-shape.js'
 import { type Base, resolveTokens, type TextRole, type Tokens } from './tokens.js'
 
 export interface Size {
@@ -106,13 +105,10 @@ export function nodeSize(node: Node, kit: Kit): Size {
   const content = nodeContent(node, kit)
   const hasIcon = !!resolveIcon(node.spec)
   const metrics = cardMetrics(content, hasIcon, kit.tokens)
-  const shape = shapeOf(node.shape)
-  const width =
-    Math.max(card.minWidth, contentWidth(content, hasIcon, kit) + card.padding * 2) / shape.inner.x
-  const height = Math.max(card.minHeight, metrics.height + card.padding * 2) / shape.inner.y
-  return shape.square
-    ? { width: Math.max(width, height), height: Math.max(width, height) }
-    : { width, height }
+  return {
+    width: Math.max(card.minWidth, contentWidth(content, hasIcon, kit) + card.padding * 2),
+    height: Math.max(card.minHeight, metrics.height + card.padding * 2),
+  }
 }
 
 /** The label of a port as a box; `undefined` for a port with no label. */

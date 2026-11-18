@@ -90,7 +90,6 @@ const builtinActions: Action[] = [
       const productId = info.kind === 'node' ? diagramState.nodes.get(id)?.productId : undefined
       clipboard.set({
         label: Array.isArray(info.label) ? info.label.join(', ') : info.label,
-        shape: info.kind === 'node' ? info.shape : undefined,
         spec: info.kind === 'node' ? info.spec : undefined,
         productId,
         elementKind: info.kind,
@@ -120,7 +119,6 @@ const builtinActions: Action[] = [
           id: pastedId,
           label: entry.label,
           spec: entry.spec,
-          shape: entry.shape,
           position: pos,
         })
         if (entry.productId) diagramState.bindNodeToProduct(pastedId, entry.productId)
@@ -155,7 +153,6 @@ const builtinActions: Action[] = [
           id: dupId,
           label,
           spec: info.spec,
-          shape: info.shape,
         })
         if (productId) diagramState.bindNodeToProduct(dupId, productId)
       }

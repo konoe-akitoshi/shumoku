@@ -334,15 +334,9 @@ export const sampleNetworkDrawing: DrawingLayer = {
     },
     'rt-ha': {
       label: 'Keepalive',
-      style: {
-        minLength: 300,
-      },
     },
     'fw-ha': {
       label: 'HA Sync',
-      style: {
-        minLength: 300,
-      },
     },
     'core-dist': {
       label: '40G LACP',

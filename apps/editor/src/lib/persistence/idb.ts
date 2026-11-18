@@ -1,15 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type {
-  Link,
-  LinkPresentation,
-  Node,
-  Position,
-  Size,
-  Subgraph,
-  SubgraphPresentation,
-} from '@shumoku/core'
+import type { Link, LinkPresentation, Node, Subgraph, SubgraphPresentation } from '@shumoku/core'
 import { encodeNodeRow } from './node-row'
 import { encodeLinkRow, encodeSubgraphRow } from './style-rows'
 
@@ -115,19 +107,13 @@ export function openDb(): Promise<IDBDatabase> {
                   projectId: string
                   id: string
                   data: Node
-                  presentation?: {
-                    nodeId: string
-                    position?: Position
-                    size?: Size
-                    shape?: Node['shape']
-                    style?: Node['style']
-                  }
+                  presentation?: { nodeId: string }
                 }
                 if (row.presentation && row.presentation.nodeId !== row.id)
                   throw new Error('Invalid cached node presentation ID')
-                const { nodeId: _nodeId, ...overrides } = row.presentation ?? {}
-                const node = { ...row.data, ...overrides }
-                cursor.update(encodeNodeRow(row.projectId, row.id, node))
+                // Nothing an older row kept beside the facts is drawn any more: its position, size,
+                // shape, style and port placements are dropped.
+                cursor.update(encodeNodeRow(row.projectId, row.id, row.data))
               } else if (kind === 'links') {
                 const row = cursor.value as {
                   projectId: string
@@ -137,12 +123,8 @@ export function openDb(): Promise<IDBDatabase> {
                 }
                 if (row.presentation && row.presentation.linkId !== row.id)
                   throw new Error('Invalid cached link presentation ID')
-                cursor.update(
-                  encodeLinkRow(row.projectId, row.id, {
-                    ...row.data,
-                    ...(row.presentation ? { style: row.presentation.style } : {}),
-                  }),
-                )
+                // A link's look is the drawing's: an older row's style is dropped.
+                cursor.update(encodeLinkRow(row.projectId, row.id, row.data))
               } else {
                 const row = cursor.value as {
                   projectId: string

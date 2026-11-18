@@ -42,7 +42,6 @@ function graphWith(nodes: Array<{ id: string; mgmtIp?: string; mac?: string }>):
     nodes: nodes.map((n) => ({
       id: n.id,
       label: n.id,
-      shape: 'rect',
       identity: {
         ...(n.mgmtIp ? { mgmtIp: n.mgmtIp } : {}),
         ...(n.mac ? { mac: n.mac } : {}),

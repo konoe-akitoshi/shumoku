@@ -43,8 +43,8 @@ export function medianWireWidth(links: readonly Link[], kit: Kit): number {
   return known.length % 2 ? (known[m] ?? 0) : ((known[m - 1] ?? 0) + (known[m] ?? 0)) / 2
 }
 
-/** The width a link's line is drawn at: what the user wrote wins over the speed; `unnamed` when neither. */
+/** The width a link's line is drawn at: by its speed; `unnamed` when the speed is not known. */
 export function lineWidth(link: Link, kit: Kit, unnamed: number): number {
   const speed = linkSpeedBps(link)
-  return link.style?.strokeWidth ?? (speed === undefined ? unnamed : speedWidth(speed, kit))
+  return speed === undefined ? unnamed : speedWidth(speed, kit)
 }

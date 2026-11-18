@@ -128,7 +128,6 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
         {
           id: 'intrinsic-1',
           label: '',
-          shape: 'rect',
           identity: { mgmtIp: '10.0.0.1' },
           attachments: [nodeBinding('zbx', '42')],
         },
@@ -141,9 +140,7 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
       status: 'ok',
       graph: {
         version: '1.0',
-        nodes: [
-          { id: 'discovered:7', label: 'R1', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
-        ],
+        nodes: [{ id: 'discovered:7', label: 'R1', identity: { mgmtIp: '10.0.0.1' } }],
         links: [],
       },
     }
@@ -161,7 +158,6 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
         {
           id: 'intrinsic-1',
           label: '',
-          shape: 'rect',
           identity: { mgmtIp: '10.0.0.1' },
           ports: [
             {
@@ -187,7 +183,6 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
           {
             id: 'discovered:7',
             label: 'R1',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
             ports: [
               {
@@ -225,7 +220,6 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
         {
           id: 'intrinsic-a',
           label: '',
-          shape: 'rect',
           identity: { mgmtIp: '10.0.0.1' },
           ports: [
             {
@@ -250,7 +244,6 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
           {
             id: 'discovered:1',
             label: 'A',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
             ports: [
               {
@@ -264,7 +257,6 @@ describe('resolve folds metrics-binding by identity (re-sync follow)', () => {
           {
             id: 'discovered:2',
             label: 'B',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.2' },
             ports: [{ id: 'obs-port-b', label: 'Gi0/2', connectors: ['rj45'] }],
           },

@@ -53,14 +53,13 @@ test('the editor keeps what the YAML says beyond the diagram across edits', asyn
     software: 'IOS-XE 17.9',
   })
 
-  diagramState.updateNode('core', { label: 'Core 1', shape: 'cylinder' })
+  diagramState.updateNode('core', { label: 'Core 1' })
   const edited = diagramState.exportModel()
   expect(edited.config.nodes.find((n) => n.id === 'core')).toMatchObject({
     label: 'Core 1',
     product: 'Cisco/Catalyst/C9300',
     software: 'IOS-XE 17.9',
   })
-  expect(edited.drawing?.nodes?.core?.shape).toBe('cylinder')
   expect(edited.config.nodes.find((n) => n.id === 'vm')?.host).toBe('edge')
   expect(edited.config.routingDomains).toEqual([{ id: 'internet' }])
   expect(edited.config.links.find((l) => l.id === 'uplink')).toMatchObject({
@@ -87,15 +86,34 @@ test('undo restores the model, and removing a node drops what referred to it', a
 
 test('editing the YAML replaces the configuration and keeps the layers of the ids it has', async () => {
   await load()
-  diagramState.updateNode('core', { shape: 'cylinder' })
-  const shape = diagramState.exportModel().drawing?.nodes?.core?.shape
-  expect(shape).toBe('cylinder')
+  diagramState.updateLink('uplink', { label: 'Uplink' })
+  const label = diagramState.exportModel().drawing?.links?.uplink?.label
+  expect(label).toBe('Uplink')
   const next = readNetworkModel(
     `${yaml}\n  - id: extra\n    endpoints: [{ node: core }, { node: vm }]\n`,
   )
   await diagramState.replaceModel({ ...diagramState.model, config: next.config })
   const model = diagramState.exportModel()
   expect(model.config.links.some((l) => l.id === 'extra')).toBe(true)
-  expect(model.drawing?.nodes?.core?.shape).toEqual(shape)
+  expect(model.drawing?.links?.uplink?.label).toEqual(label)
   expect(diagramState.links.some((l) => l.id === 'extra')).toBe(true)
+})
+
+test('a project an older store kept loads without the shapes, styles and colours it wrote', async () => {
+  const model = readNetworkModel(yaml)
+  await diagramState.loadProject('older', {
+    version: NETED_FORMAT_VERSION,
+    name: 'Older',
+    products: [],
+    model: {
+      ...model,
+      drawing: JSON.parse(
+        JSON.stringify({
+          nodes: { core: { shape: 'cylinder', style: { fill: '#123456' } } },
+          links: { uplink: { label: 'Uplink', style: { stroke: '#234567' } } },
+        }),
+      ),
+    },
+  })
+  expect(diagramState.exportModel().drawing).toEqual({ links: { uplink: { label: 'Uplink' } } })
 })

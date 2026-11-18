@@ -27,7 +27,6 @@ export const sampleDiagram = {
     {
       id: 'cloud-services',
       label: 'Services VPC',
-      shape: 'rounded',
       parent: 'cloud',
       spec: {
         kind: 'service',
@@ -46,7 +45,6 @@ export const sampleDiagram = {
     {
       id: 'vgw',
       label: 'VPN Gateway',
-      shape: 'rounded',
       parent: 'cloud',
       spec: {
         kind: 'service',
@@ -75,7 +73,6 @@ export const sampleDiagram = {
     {
       id: 'isp1',
       label: 'ISP Line #1 (Primary)',
-      shape: 'rounded',
       parent: 'perimeter/edge',
       spec: {
         kind: 'hardware',
@@ -92,7 +89,6 @@ export const sampleDiagram = {
     {
       id: 'isp2',
       label: 'ISP Line #2 (Secondary)',
-      shape: 'rounded',
       parent: 'perimeter/edge',
       spec: {
         kind: 'hardware',
@@ -109,7 +105,6 @@ export const sampleDiagram = {
     {
       id: 'rt1',
       label: 'Edge-RT-1 (Master)',
-      shape: 'rounded',
       parent: 'perimeter/edge',
       spec: {
         kind: 'hardware',
@@ -143,7 +138,6 @@ export const sampleDiagram = {
     {
       id: 'rt2',
       label: 'Edge-RT-2 (Backup)',
-      shape: 'rounded',
       parent: 'perimeter/edge',
       spec: {
         kind: 'hardware',
@@ -177,7 +171,6 @@ export const sampleDiagram = {
     {
       id: 'fw1',
       label: 'FW-1 (Active)',
-      shape: 'rounded',
       parent: 'perimeter/security',
       spec: {
         kind: 'hardware',
@@ -211,7 +204,6 @@ export const sampleDiagram = {
     {
       id: 'fw2',
       label: 'FW-2 (Standby)',
-      shape: 'rounded',
       parent: 'perimeter/security',
       spec: {
         kind: 'hardware',
@@ -240,7 +232,6 @@ export const sampleDiagram = {
     {
       id: 'dmz-sw',
       label: 'DMZ-SW',
-      shape: 'rounded',
       parent: 'dmz',
       spec: {
         kind: 'hardware',
@@ -267,7 +258,6 @@ export const sampleDiagram = {
     {
       id: 'web-srv',
       label: 'Web Server',
-      shape: 'rounded',
       parent: 'dmz',
       spec: {
         kind: 'hardware',
@@ -284,7 +274,6 @@ export const sampleDiagram = {
     {
       id: 'mail-srv',
       label: 'Mail Server',
-      shape: 'rounded',
       parent: 'dmz',
       spec: {
         kind: 'hardware',
@@ -301,7 +290,6 @@ export const sampleDiagram = {
     {
       id: 'core-sw',
       label: 'Core-SW',
-      shape: 'rounded',
       parent: 'campus/noc',
       spec: {
         kind: 'hardware',
@@ -330,7 +318,6 @@ export const sampleDiagram = {
     {
       id: 'dist-sw',
       label: 'Distribution-SW',
-      shape: 'rounded',
       parent: 'campus/noc',
       spec: {
         kind: 'hardware',
@@ -359,7 +346,6 @@ export const sampleDiagram = {
     {
       id: 'sw-a1',
       label: 'SW-A1 (Floor 1)',
-      shape: 'rounded',
       parent: 'campus/building-a',
       spec: {
         kind: 'hardware',
@@ -388,7 +374,6 @@ export const sampleDiagram = {
     {
       id: 'ap-a1',
       label: 'AP-A1',
-      shape: 'rounded',
       parent: 'campus/building-a',
       spec: {
         kind: 'hardware',
@@ -407,7 +392,6 @@ export const sampleDiagram = {
     {
       id: 'ap-a2',
       label: 'AP-A2',
-      shape: 'rounded',
       parent: 'campus/building-a',
       spec: {
         kind: 'hardware',
@@ -426,7 +410,6 @@ export const sampleDiagram = {
     {
       id: 'sw-b1',
       label: 'SW-B1',
-      shape: 'rounded',
       parent: 'campus/building-b',
       spec: {
         kind: 'hardware',
@@ -455,7 +438,6 @@ export const sampleDiagram = {
     {
       id: 'ap-b1',
       label: 'AP-B1',
-      shape: 'rounded',
       parent: 'campus/building-b',
       spec: {
         kind: 'hardware',
@@ -474,7 +456,6 @@ export const sampleDiagram = {
     {
       id: 'ap-b2',
       label: 'AP-B2 (Desk)',
-      shape: 'rounded',
       parent: 'campus/building-b',
       spec: {
         kind: 'hardware',
@@ -498,7 +479,6 @@ export const sampleDiagram = {
     {
       id: 'ip-phone',
       label: 'IP Phone',
-      shape: 'rounded',
       parent: 'campus/building-b',
       spec: {
         kind: 'hardware',
@@ -661,9 +641,6 @@ export const sampleDiagram = {
       },
       label: 'Keepalive',
       redundancy: 'ha',
-      style: {
-        minLength: 300,
-      },
       cable: { category: 'cat6' },
     },
     {
@@ -710,9 +687,6 @@ export const sampleDiagram = {
       },
       label: 'HA Sync',
       redundancy: 'ha',
-      style: {
-        minLength: 300,
-      },
       cable: { category: 'cat6' },
     },
     {

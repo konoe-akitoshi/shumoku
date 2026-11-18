@@ -61,7 +61,7 @@ describe('detaching a source', () => {
     await record(topo.id, old, {
       version: '1',
       name: 'old',
-      nodes: [{ id: 'd10', label: 'd10', shape: 'rect', identity: { mgmtIp: '172.20.17.12' } }],
+      nodes: [{ id: 'd10', label: 'd10', identity: { mgmtIp: '172.20.17.12' } }],
       links: [],
     } as NetworkGraph)
     const oldEntity = nodeEntity(topo.id, old, 'd10')
@@ -74,7 +74,7 @@ describe('detaching a source', () => {
     await record(topo.id, fresh, {
       version: '1',
       name: 'new',
-      nodes: [{ id: 'd19', label: 'd19', shape: 'rect', identity: { mgmtIp: '172.20.17.12' } }],
+      nodes: [{ id: 'd19', label: 'd19', identity: { mgmtIp: '172.20.17.12' } }],
       links: [],
     } as NetworkGraph)
     const freshEntity = nodeEntity(topo.id, fresh, 'd19')
@@ -88,7 +88,7 @@ describe('detaching a source', () => {
     const graph = {
       version: '1',
       name: 'src',
-      nodes: [{ id: 'r1', label: 'r1', shape: 'rect', identity: { mgmtIp: '10.1.0.1' } }],
+      nodes: [{ id: 'r1', label: 'r1', identity: { mgmtIp: '10.1.0.1' } }],
       links: [],
     } as NetworkGraph
     attachSource(topo.id, src, 'topology')

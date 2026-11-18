@@ -26,7 +26,7 @@ const g = (nodeId: string): NetworkGraph =>
   ({
     version: '1',
     name: 'manual',
-    nodes: [{ id: nodeId, label: nodeId, shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+    nodes: [{ id: nodeId, label: nodeId, identity: { mgmtIp: '10.0.0.1' } }],
     links: [],
   }) as NetworkGraph
 

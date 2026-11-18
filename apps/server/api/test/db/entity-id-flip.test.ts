@@ -41,14 +41,12 @@ function sampleGraph(name: string): NetworkGraph {
       {
         id: 'a',
         label: 'A',
-        shape: 'rect',
         identity: { mgmtIp: '10.0.0.1' },
         ports: [{ id: 'pa', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } }],
       },
       {
         id: 'b',
         label: 'B',
-        shape: 'rect',
         identity: { mgmtIp: '10.0.0.2' },
         ports: [{ id: 'pb', label: 'Gi0/2', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } }],
       },

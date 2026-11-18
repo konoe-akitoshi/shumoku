@@ -2,27 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { DiagramAnnotation, Link, Node, NodeShape } from './types.js'
-
-/** The safe central rectangle inside each nonrectangular outline. */
-export function nodeContentScale(shape?: NodeShape): { x: number; y: number } {
-  switch (shape) {
-    case 'circle':
-      return { x: Math.SQRT1_2, y: Math.SQRT1_2 }
-    case 'diamond':
-      return { x: 0.5, y: 0.5 }
-    case 'hexagon':
-      return { x: 0.75, y: 0.85 }
-    case 'cylinder':
-      return { x: 0.9, y: 0.7 }
-    case 'stadium':
-      return { x: 0.65, y: 0.8 }
-    case 'trapezoid':
-      return { x: 0.7, y: 0.85 }
-    default:
-      return { x: 1, y: 1 }
-  }
-}
+import type { DiagramAnnotation, Link, Node } from './types.js'
 
 /** A label line as drawn: the bold and line-break markup a label may carry is not text. */
 export function labelText(line: string): string {

@@ -2,13 +2,8 @@ import type { Link, Subgraph } from '@shumoku/core'
 import { expect, test } from 'vitest'
 import { decodeLinkRow, decodeSubgraphRow, encodeLinkRow, encodeSubgraphRow } from './style-rows'
 
-test('link and group style changes leave structural rows identical and clearing styles removes overrides', () => {
-  const link: Link = {
-    id: 'l',
-    from: { node: 'a', port: 'eth0' },
-    to: { node: 'b', port: 'eth1' },
-    style: { stroke: 'red' },
-  }
+test('a link row is all facts, and a group padding change leaves the structural row identical', () => {
+  const link: Link = { id: 'l', from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }
   const group: Subgraph = {
     id: 'g',
     label: 'Group',
@@ -17,14 +12,22 @@ test('link and group style changes leave structural rows identical and clearing 
   }
   const linkRow = encodeLinkRow('p', 'l', link)
   const groupRow = encodeSubgraphRow('p', 'g', group)
+  expect(linkRow).not.toHaveProperty('presentation')
   expect(decodeLinkRow(JSON.parse(JSON.stringify(linkRow)))).toEqual(link)
   expect(decodeSubgraphRow(JSON.parse(JSON.stringify(groupRow)))).toEqual(group)
-  expect(encodeLinkRow('p', 'l', { ...link, style: {} }).data).toEqual(linkRow.data)
   expect(encodeSubgraphRow('p', 'g', { ...group, style: {} }).data).toEqual(groupRow.data)
-  expect(encodeLinkRow('p', 'l', { ...link, style: undefined })).not.toHaveProperty('presentation')
   expect(encodeSubgraphRow('p', 'g', { ...group, style: undefined })).not.toHaveProperty(
     'presentation',
   )
+})
+
+test('an older link row’s style is read and dropped', () => {
+  const link: Link = { id: 'l', from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }
+  const row = {
+    ...encodeLinkRow('p', 'l', link),
+    presentation: { linkId: 'l', style: { stroke: 'red' } },
+  }
+  expect(decodeLinkRow(row)).toEqual(link)
 })
 
 test('row codecs reject row and presentation target ID mismatches', () => {

@@ -48,7 +48,6 @@ const graphWith = (...nodeIds: string[]): NetworkGraph =>
     nodes: nodeIds.map((id) => ({
       id,
       label: id,
-      shape: 'rect',
       identity: { sysName: id },
     })),
     links: [],

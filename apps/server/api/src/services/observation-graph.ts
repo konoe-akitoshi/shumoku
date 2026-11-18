@@ -24,12 +24,9 @@ import {
   type HardwareSpec,
   type Identity,
   type LegendSettings,
-  type LinkStyle,
   type MetricsBindingAttachment,
   type NodeExclusion,
-  type NodeShape,
   type NodeSpec,
-  type NodeStyle,
   type PaperOrientation,
   type PaperSize,
   type PolicyAttachment,
@@ -48,28 +45,6 @@ import { sanitizeObservationIcon } from './sanitize-icon.js'
 function modelObject<T>() {
   return <S extends z.ZodRawShape & Record<keyof T, z.ZodType>>(shape: S) => z.looseObject(shape)
 }
-
-const nodeShapeSchema = z.enum([
-  'rect',
-  'rounded',
-  'circle',
-  'diamond',
-  'hexagon',
-  'cylinder',
-  'stadium',
-  'trapezoid',
-]) satisfies z.ZodType<NodeShape>
-
-const nodeStyleSchema = modelObject<NodeStyle>()({
-  fill: z.string().optional(),
-  stroke: z.string().optional(),
-  strokeWidth: z.number().optional(),
-  strokeDasharray: z.string().optional(),
-  textColor: z.string().optional(),
-  fontSize: z.number().optional(),
-  fontWeight: z.enum(['normal', 'bold']).optional(),
-  opacity: z.number().optional(),
-}) satisfies z.ZodType<NodeStyle>
 
 const deviceTypeSchema = z.enum(DeviceType) satisfies z.ZodType<DeviceType>
 
@@ -183,14 +158,6 @@ const attachmentSchema = z.union([
 ]) satisfies z.ZodType<Attachment>
 
 const entityIdSchema = z.string().transform(asEntityId) satisfies z.ZodType<EntityId>
-
-const linkStyleSchema = modelObject<LinkStyle>()({
-  stroke: z.string().optional(),
-  strokeWidth: z.number().optional(),
-  strokeDasharray: z.string().optional(),
-  opacity: z.number().optional(),
-  minLength: z.number().optional(),
-}) satisfies z.ZodType<LinkStyle>
 
 const regionIdentitySchema = modelObject<RegionIdentity>()({
   name: z.string().optional(),
@@ -484,12 +451,11 @@ const drawingLayerSchema = z.looseObject({
       z.looseObject({
         // Strip script/handlers from an untrusted inline icon at ingestion.
         icon: iconFieldSchema,
-        shape: nodeShapeSchema.optional(),
-        style: nodeStyleSchema.optional(),
       }),
     )
     .optional(),
-  links: z.record(z.string(), z.looseObject({ style: linkStyleSchema.optional() })).optional(),
+  // A node's and a link's look is the drawing's: a source's shapes and colours pass through unread.
+  links: z.record(z.string(), z.looseObject({})).optional(),
   groups: z
     .record(
       z.string(),

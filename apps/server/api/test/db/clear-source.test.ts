@@ -29,7 +29,7 @@ const graphWith = (nodeId: string): NetworkGraph =>
   ({
     version: '1',
     name: 't',
-    nodes: [{ id: nodeId, label: nodeId, shape: 'rect', identity: { sysName: nodeId } }],
+    nodes: [{ id: nodeId, label: nodeId, identity: { sysName: nodeId } }],
     links: [],
   }) as NetworkGraph
 

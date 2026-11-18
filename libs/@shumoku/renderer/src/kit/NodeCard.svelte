@@ -25,10 +25,19 @@
 
 <g class="node" data-id={look.id} data-device-type={look.deviceType} filter="url(#node-shadow)">
   <title>{look.title}</title>
-  <g class="node-bg" stroke-dasharray={look.frame.dash}>
-    {#each look.frame.parts as part}
-      <svelte:element this={part.tag} {...part.attrs} />
-    {/each}
+  <g class="node-bg">
+    <rect
+      x={look.frame.x}
+      y={look.frame.y}
+      width={look.frame.width}
+      height={look.frame.height}
+      rx={look.frame.rx}
+      ry={look.frame.rx}
+      fill={look.frame.fill}
+      stroke={look.frame.stroke}
+      stroke-width={look.frame.strokeWidth}
+      stroke-dasharray={look.frame.dash}
+    />
   </g>
 
   {#if look.heading}

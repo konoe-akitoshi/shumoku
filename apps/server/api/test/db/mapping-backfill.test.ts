@@ -36,7 +36,7 @@ describe('mapping_json backfill (Phase 2 → bindings, then drop column)', () =>
     const graph: NetworkGraph = {
       version: '1',
       name: 'bf',
-      nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+      nodes: [{ id: 'a', label: 'A', identity: { mgmtIp: '10.0.0.1' } }],
       links: [],
     } as NetworkGraph
     await svc.writeProjectOverlay(topo.id, graphToSource(graph))

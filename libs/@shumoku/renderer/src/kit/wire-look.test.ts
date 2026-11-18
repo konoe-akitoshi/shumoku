@@ -48,16 +48,15 @@ describe('wireLook', () => {
     }
   })
 
-  it('takes the colour from what the user wrote, else the VLAN, else the theme', () => {
+  it('takes the colour from the VLAN, else the theme', () => {
     const vlan = [10]
     const vlans = new Map([[vlanKey(vlan), '#abcdef']])
-    expect(look(link({ vlan, style: { stroke: '#123456' } }), 1, vlans).color).toBe('#123456')
     expect(look(link({ vlan }), 1, vlans).color).toBe('#abcdef')
     expect(look(link()).color).toBe(colors.link)
   })
 
-  it('keeps a dash the user wrote on a link whose type names none', () => {
-    expect(look(link({ style: { strokeDasharray: '4 2' } })).dash).toEqual([4, 2])
+  it('draws a link whose type names no pattern solid', () => {
+    expect(look(link()).dash).toBeUndefined()
   })
 
   it('carries the path of the line', () => {

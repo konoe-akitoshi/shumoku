@@ -41,7 +41,6 @@ const graphWith = (observedAt: number, ...nodeIds: string[]): NetworkGraph =>
     nodes: nodeIds.map((id) => ({
       id,
       label: id,
-      shape: 'rect',
       identity: { sysName: id },
       provenance: { source: 's', observedAt },
     })),
