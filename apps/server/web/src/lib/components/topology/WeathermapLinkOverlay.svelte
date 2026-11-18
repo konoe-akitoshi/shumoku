@@ -4,10 +4,11 @@
   import {
     bpsToDurationMs,
     computeLaneGeometry,
-    DOWN_COLOR,
     flowLevel,
-    getUtilizationColor,
     type LinkFlowMetrics,
+    statusColor,
+    utilizationColor,
+    utilizationFlowColor,
     utilizationToDurationMs,
   } from '$lib/weathermap'
 
@@ -34,14 +35,18 @@
   // Three variables, three channels (see weathermap conventions: color =
   // utilization, particle frequency/speed = throughput intensity, motion =
   // direction):
-  //   - COLOR encodes UTILISATION (congestion): green → amber → red.
+  //   - COLOR encodes UTILISATION (congestion): green → amber → red. The link is
+  //     drawn in the step's colour, which keeps its contrast in either theme; the
+  //     flow streams in the step's lighter `flow` tone over it (see colors.ts).
   //   - MOTION direction encodes FLOW direction (in vs out flow opposite ways;
   //     lane position reinforces it).
   //   - PARTICLE DENSITY + SPEED + brightness encode THROUGHPUT (bps): busier
   //     links stream denser, faster and brighter.
-  const inColor = $derived(down ? DOWN_COLOR : getUtilizationColor(inUtil))
-  const outColor = $derived(down ? DOWN_COLOR : getUtilizationColor(outUtil))
-  const baseColor = $derived(down ? DOWN_COLOR : getUtilizationColor(Math.max(inUtil, outUtil)))
+  const inColor = $derived(utilizationFlowColor(inUtil))
+  const outColor = $derived(utilizationFlowColor(outUtil))
+  const peak = $derived(Math.max(inUtil, outUtil))
+  const baseColor = $derived(down ? statusColor('down') : utilizationColor(peak))
+  const combinedFlowColor = $derived(utilizationFlowColor(peak))
   // Throughput intensity 0..1 (log-scaled bps, utilization fallback) — drives
   // density + brightness. Speed comes from the existing duration mapping.
   const inLevel = $derived(flowLevel(metrics?.inBps ?? 0, inUtil))
@@ -84,6 +89,7 @@
       dir: 'in' as const,
       d: lanePath(geom.laneOffset),
       color: inColor,
+      link: utilizationColor(inUtil),
       duration: inDuration,
       level: inLevel,
       stream: stream(geom.laneWidth, inLevel),
@@ -92,6 +98,7 @@
       dir: 'out' as const,
       d: lanePath(-geom.laneOffset),
       color: outColor,
+      link: utilizationColor(outUtil),
       duration: outDuration,
       level: outLevel,
       stream: stream(geom.laneWidth, outLevel),
@@ -134,6 +141,7 @@
         data-direction={lane.dir}
         d={lane.d}
         style:--wm-color={lane.color}
+        style:--wm-link-color={lane.link}
         style:--wm-width={String(geom.laneWidth)}
         style:--wm-dot={String(lane.stream.dot)}
         style:--wm-gap={String(lane.stream.gap)}
@@ -149,7 +157,8 @@
       class="wm-flow"
       data-direction="out"
       d={context.pathD}
-      style:--wm-color={baseColor}
+      style:--wm-color={combinedFlowColor}
+      style:--wm-link-color={baseColor}
       style:--wm-width={String(geom.combinedWidth)}
       style:--wm-dot={String(combinedStream.dot)}
       style:--wm-gap={String(combinedStream.gap)}
@@ -203,26 +212,29 @@
     display: none;
   }
 
+  /* The link in the utilization colour, opaque: the colour is the reading, and
+         it keeps its contrast only at full strength (colors.ts). */
   :global(.wm-active > path.link) {
     stroke: var(--wm-base-color, currentColor);
-    opacity: 0.55;
+    opacity: 1;
     transition:
       stroke 200ms ease,
       opacity 200ms ease;
   }
 
   /* Down: no stream; the base link itself is the indicator — solid red dashed
-         line, full opacity. */
+         line. */
   :global(.wm-active.wm-down > path.link) {
-    opacity: 1;
     stroke-dasharray: 8 4;
   }
 
   @media (prefers-reduced-motion: reduce) {
+    /* No motion: each lane shows its own direction's utilization, solid. */
     .wm-flow {
       animation: none !important;
+      stroke: var(--wm-link-color, var(--wm-color, currentColor));
       stroke-dasharray: none;
-      opacity: 0.6;
+      opacity: 1 !important;
     }
   }
 </style>

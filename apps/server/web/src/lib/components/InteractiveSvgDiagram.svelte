@@ -103,7 +103,12 @@
   import { identityOf, type ResolvedRecordView } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
   import { nodeLabel, nodeLabelById } from '$lib/utils/node-label'
-  import { getUtilizationColor, IDLE_LINK_METRICS, isLinkInstrumented } from '$lib/weathermap'
+  import {
+    IDLE_LINK_METRICS,
+    isLinkInstrumented,
+    UTILIZATION_STEPS,
+    utilizationColor,
+  } from '$lib/weathermap'
 
   // --- Props (Svelte 5 runes) ---
   interface Props {
@@ -354,13 +359,18 @@
       if (m.inUtilization !== undefined || m.outUtilization !== undefined) {
         const inU = m.inUtilization ?? 0
         const outU = m.outUtilization ?? 0
-        out += `<br><span style="color: ${getUtilizationColor(inU)}">In: ${inU.toFixed(1)}%</span> <span style="color: ${getUtilizationColor(outU)}">Out: ${outU.toFixed(1)}%</span>`
+        out += `<br>${swatch(inU)}In: ${inU.toFixed(1)}% ${swatch(outU)}Out: ${outU.toFixed(1)}%`
       } else if (m.utilization !== undefined) {
-        out += `<br><span style="color: ${getUtilizationColor(m.utilization)}">Utilization: ${m.utilization.toFixed(1)}%</span>`
+        out += `<br>${swatch(m.utilization)}Utilization: ${m.utilization.toFixed(1)}%`
       }
       out += `<br><span class="muted">Status: ${escapeHtml(String(m.status))}</span>`
     }
     return out
+  }
+
+  /** A dot in a utilization's colour beside its figure; the figure stays in the text colour. */
+  function swatch(utilization: number): string {
+    return `<span style="display:inline-block;width:8px;height:8px;margin-right:4px;border-radius:50%;background:${utilizationColor(utilization)}"></span>`
   }
 
   function escapeHtml(s: string): string {
@@ -492,22 +502,12 @@
     <div class="legend">
       <div class="legend-title">Utilization</div>
       <div class="legend-items">
-        <div class="legend-item">
-          <span class="legend-color" style="background: #22c55e"></span>
-          <span>0-25%</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color" style="background: #eab308"></span>
-          <span>25-50%</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color" style="background: #f97316"></span>
-          <span>50-75%</span>
-        </div>
-        <div class="legend-item">
-          <span class="legend-color" style="background: #ef4444"></span>
-          <span>75%+</span>
-        </div>
+        {#each UTILIZATION_STEPS as step (step.key)}
+          <div class="legend-item">
+            <span class="legend-color" style="background: var(--shumoku-util-{step.key})"></span>
+            <span>{step.label}</span>
+          </div>
+        {/each}
       </div>
     </div>
   {/if}
