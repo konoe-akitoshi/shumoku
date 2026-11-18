@@ -14,6 +14,6 @@ POST /topologies/{topologyId}/sources/{sourceId}/probe api path removed without 
 # topology, a shared dashboard) loads `/view`, the graph with the scene the Server baked. The
 # graph-only reads, from which the browser laid a network out again, are removed; a client reads
 # `graph` (and `record`) off `/view` instead.
-GET /topologies/{id}/graph api removed without deprecation
-GET /share/topologies/{token}/graph api removed without deprecation
-GET /share/dashboards/{token}/topologies/{id}/graph api removed without deprecation
+GET /topologies/{id}/graph api path removed without deprecation
+GET /share/topologies/{token}/graph api path removed without deprecation
+GET /share/dashboards/{token}/topologies/{id}/graph api path removed without deprecation
