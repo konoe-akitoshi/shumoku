@@ -22,7 +22,6 @@ import {
   ROOT,
   relation,
   type Satellite,
-  slotsOf,
 } from './problem.js'
 import type { Ranks } from './ranks.js'
 import type { Scene } from './scene.js'
@@ -197,7 +196,6 @@ export function nestFrames(problem: Problem): { outer: Problem; nested: Nested[]
     frames: problem.frames.filter((f) => !gone.has(f.id)),
     items,
     lines,
-    slots: slotsOf(lines, problem.metrics),
     above: kept,
     level: levels,
     satellites,
@@ -304,7 +302,6 @@ export function localProblemOf(
     frames: [root ?? { id: ROOT, insets: { top: 0, right: 0, bottom: 0, left: 0 } }],
     items,
     lines,
-    slots: slotsOf(lines, problem.metrics),
     above: edges,
     level: problem.level.filter((l) => inside.has(l.a) && inside.has(l.b)),
     satellites: problem.satellites.filter((s) => inside.has(s.item)),

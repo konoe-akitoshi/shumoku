@@ -3,8 +3,9 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * What a port looks like: the square marker where a link meets a card, and the chip that names
- * it. The chip sits one offset away from the port on the side the port faces; the text reads
+ * What a port looks like: the marker where a link meets a card, and the chip that names it. The
+ * marker is a square, widened across its line where the line is wider than the square, so a fast
+ * link's line ends in its port instead of spilling round it. The chip sits one offset away from the port on the side the port faces; the text reads
  * from there, inside the chip, half the padding in from the edge nearest the port.
  */
 
@@ -22,7 +23,8 @@ export interface PortLook {
   marker: {
     x: number
     y: number
-    size: number
+    width: number
+    height: number
     rx: number
     fill: string
     stroke: string
@@ -54,17 +56,41 @@ function textAt(at: Point, side: Side, offset: number) {
   }
 }
 
+/**
+ * The widest line ending at each drawn point: a wire's first and last points are its ports, so a
+ * port finds the lines it ends by where it stands.
+ */
+export function portLines(wires: readonly { points: readonly Point[]; stroke: number }[]) {
+  const key = (p: Point) => `${p.x},${p.y}`
+  const widest = new Map<string, number>()
+  for (const { points, stroke } of wires) {
+    for (const end of [points[0], points[points.length - 1]]) {
+      if (!end) continue
+      const k = key(end)
+      widest.set(k, Math.max(widest.get(k) ?? 0, stroke))
+    }
+  }
+  return (at: Point): number | undefined => widest.get(key(at))
+}
+
 export function portLook(
-  port: { at: Point; side: Side; label?: string; row?: 0 | 1 },
+  port: { at: Point; side: Side; label?: string; row?: 0 | 1; line?: number },
   kit: Kit,
   colors: KitColors,
 ): PortLook {
   const { tokens } = kit
   const { at } = port
+  const square = tokens.port.size
+  // across the line: the square, or the line with a quarter of the square on each side
+  const across = Math.max(square, (port.line ?? 0) + square / 2)
+  const vertical = port.side === 'top' || port.side === 'bottom'
+  const width = vertical ? across : square
+  const height = vertical ? square : across
   const marker = {
-    x: at.x - tokens.port.size / 2,
-    y: at.y - tokens.port.size / 2,
-    size: tokens.port.size,
+    x: at.x - width / 2,
+    y: at.y - height / 2,
+    width,
+    height,
     rx: tokens.port.cornerRadius,
     fill: colors.port.fill,
     stroke: colors.port.stroke,

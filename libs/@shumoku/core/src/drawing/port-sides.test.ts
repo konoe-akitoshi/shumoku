@@ -109,8 +109,11 @@ describe('gapsOf and extentOf', () => {
     depth: 0,
   }
 
-  it('raises a neighbouring gap to the room of the line, and passes a pair two apart', () => {
-    expect(gapsOf(layout, 10, 3)).toEqual([
+  // three ports whose lines ask for 10 between neighbours: a white of 4 and a ground of 3 each
+  const room = { apart: 4, halos: [3, 3, 3] }
+
+  it('raises a neighbouring gap to the room of the lines, and passes a pair two apart', () => {
+    expect(gapsOf(layout, room)).toEqual([
       { from: 0, to: 1, d: 30 },
       { from: 1, to: 2, d: 10 },
       { from: 0, to: 2, d: 50 },
@@ -118,12 +121,12 @@ describe('gapsOf and extentOf', () => {
   })
 
   it('ignores a pair that names a port the edge does not have', () => {
-    expect(gapsOf(layout, 10, 2)).toEqual([{ from: 0, to: 1, d: 30 }])
+    expect(gapsOf(layout, { apart: 4, halos: [3, 3] })).toEqual([{ from: 0, to: 1, d: 30 }])
   })
 
-  it('is the gaps and twice each margin, the margin no less than half a slot', () => {
-    expect(extentOf(layout, 10, 3)).toBe(2 * 12 + 2 * 8 + 30 + 10)
-    expect(extentOf(undefined, 10, 3)).toBe(2 * 5 + 2 * 5 + 10 + 10)
+  it('is the gaps and twice each margin, the margin no less than half a white and a ground', () => {
+    expect(extentOf(layout, room)).toBe(2 * 12 + 2 * 8 + 30 + 10)
+    expect(extentOf(undefined, room)).toBe(2 * 5 + 2 * 5 + 10 + 10)
   })
 })
 

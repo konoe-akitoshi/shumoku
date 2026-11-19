@@ -4,8 +4,7 @@
 
 import { type PortKey, type SideKey, sideKey, splitSide } from './keys.js'
 import type { PortSide, PortSideLayout } from './metrics.js'
-import { must } from './must.js'
-import { extentOf, widen } from './ports.js'
+import { extentOf, portRoom, widen } from './ports.js'
 import type { Problem } from './problem.js'
 import { portalsOf, sealedOf } from './sides.js'
 import type { Tracks } from './tracks.js'
@@ -63,13 +62,13 @@ export function needsOf(problem: Problem, tracks: Tracks): Problem {
         right: named('right'),
       },
     })
-    const slot = must(problem.slots, box, 'slot of box')
     for (const side of SIDES) {
       const list = sides.get(side)
       if (!list) continue
       const layout = laid[side]
       layouts.set(sideKey(box, side), layout)
-      const extent = extentOf(layout, slot, list.length)
+      const room = portRoom(problem, (id) => tracks.entities.get(id)?.ends ?? [], list)
+      const extent = extentOf(layout, room)
       const into = side === 'top' || side === 'bottom' ? widths : heights
       into.set(box, Math.max(into.get(box) ?? 0, extent))
     }

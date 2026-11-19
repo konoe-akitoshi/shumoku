@@ -4,7 +4,6 @@
 
 import { describe, expect, it } from 'vitest'
 import { joinKey } from '../structure/keys.js'
-import { slotOf } from './ground.js'
 import {
   above,
   below,
@@ -18,7 +17,9 @@ import {
   twin,
   whiteOf,
 } from './kin.js'
+import { layoutDrawing } from './layout.js'
 import type { Metrics } from './metrics.js'
+import { gapsOf } from './ports.js'
 import { type Line, readProblem } from './problem.js'
 import { narrowest } from './testing/report.js'
 import { networkOf, testMetrics } from './testing/support.js'
@@ -80,29 +81,40 @@ describe('a line is read with its width and family', () => {
   })
 })
 
-describe('a port slot', () => {
-  it('is the white and the line itself where the line is thin', () => {
-    expect(slotOf(metrics, [line('p', 'a', 'b', 1)])).toBe(metrics.gapApart + 2)
+describe('the room of a port', () => {
+  it('is the white and the ground of the two lines of each pair of neighbouring ports', () => {
+    expect(gapsOf(undefined, { apart: 11, halos: [1, 40, 1] })).toEqual([
+      { from: 0, to: 1, d: 11 + 1 + 40 },
+      { from: 1, to: 2, d: 11 + 40 + 1 },
+    ])
   })
 
-  it('is widened by a wide line at the port, with the white off its neighbour', () => {
-    expect(slotOf(metrics, [line('p', 'a', 'b', 1), line('w', 'a', 'c', 40)])).toBe(11 + 2 * 40)
-  })
-
-  it('is widened by the wide line of its own box only', () => {
+  it('is widened by a wide line at its own port only, not by one elsewhere on the box', () => {
+    // `a` has one wide line up to `b` and three thin ones down to `c`, `d` and `e`
     const { network, structure } = networkOf(
-      'nodes:\n  - { id: a }\n  - { id: b }\n  - { id: c }\n  - { id: d }\nlinks:\n  - { endpoints: [{ node: a }, { node: b }] }\n  - { endpoints: [{ node: c }, { node: d }] }\n',
-      [],
+      `nodes:
+  - { id: a }
+  - { id: b }
+  - { id: c }
+  - { id: d }
+  - { id: e }
+links:
+  - { endpoints: [{ node: b }, { node: a, port: up }] }
+  - { endpoints: [{ node: a, port: d1 }, { node: c }] }
+  - { endpoints: [{ node: a, port: d2 }, { node: d }] }
+  - { endpoints: [{ node: a, port: d3 }, { node: e }] }
+`,
+      ['b'],
     )
-    const read = readProblem(network, structure, {
+    const scene = layoutDrawing(network, structure, {
       ...testMetrics,
-      line: (l) => {
-        const width = l.from.node === 'a' ? 60 : 1
-        return width
-      },
+      line: (l) => (l.from.node === 'b' ? 60 : 1),
     })
-    expect(read.slots.get('a')).toBe(testMetrics.gapApart + 2 * 60)
-    expect(read.slots.get('c')).toBe(testMetrics.gapApart + 2)
+    // the wide line's one port asks its edge for twice a margin each side (white / 2 + 60); the
+    // three thin ports below ask for less, so they do not set the width, as they did when every
+    // port on the box was spaced by its widest line (then 2 * 62 + 2 * 62 + 2 * 124 = 496)
+    const a = scene.nodes.find((n) => n.node.id === 'a')
+    expect(a?.box.width).toBeCloseTo(4 * (testMetrics.gapApart / 2 + 60))
   })
 })
 
