@@ -86,11 +86,22 @@ function rowToDataSource(row: DataSourceRow): DataSource {
   }
 }
 
+/**
+ * A host-side store of alerts pushed to a data source (e.g. by a webhook). A plugin that reads
+ * pushed alerts exposes `setAlertStore`; the host hands it the same store the webhook route
+ * writes to.
+ */
+export interface PushedAlertStore {
+  getAlerts(dataSourceId: string, options?: AlertQueryOptions): Alert[]
+}
+
 export class DataSourceService {
   private db: Database
+  private alertStore: PushedAlertStore | null
 
-  constructor() {
+  constructor(options: { alertStore?: PushedAlertStore } = {}) {
     this.db = getDatabase()
+    this.alertStore = options.alertStore ?? null
   }
 
   /**
@@ -309,6 +320,14 @@ export class DataSourceService {
     // Set dataSourceId for plugins that need it (e.g., GrafanaPlugin for DB-based alerts)
     if ('setDataSourceId' in plugin && typeof plugin.setDataSourceId === 'function') {
       plugin.setDataSourceId(id)
+    }
+    // Hand pushed-alert stores to plugins that read them (e.g. a webhook-fed alerts plugin)
+    if (
+      this.alertStore &&
+      'setAlertStore' in plugin &&
+      typeof plugin.setAlertStore === 'function'
+    ) {
+      plugin.setAlertStore(this.alertStore)
     }
 
     return plugin
