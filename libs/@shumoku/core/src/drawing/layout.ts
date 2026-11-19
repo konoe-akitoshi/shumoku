@@ -13,6 +13,7 @@ import { diagonalsOf } from './diagonals.js'
 import { type Fold, foldsOf } from './fold.js'
 import { type Placed, placeAll } from './geometry.js'
 import { type Layers, layersOf } from './layers.js'
+import { heldLevels, levelClasses } from './level.js'
 import type { Metrics } from './metrics.js'
 import { needsOf } from './needs.js'
 import {
@@ -258,15 +259,19 @@ function layoutNested(
   }
 }
 
-/** How many times the coordinates are solved again with more lines bent, at most. */
+/** How many times the coordinates are solved again, letting levels go or bending lines, at most. */
 const BEND_ATTEMPTS = 8
 
 /**
  * The order of the lines (`tracksOf`), the sizes it asks for (`needsOf`) and the coordinates
  * (`placeAll`). A line laid straight across between two boxes side by side holds both its ends at
- * one height; where the ports of a side, the boxes held level and those heights leave no
- * solution, the lines whose ports close the ring are bent instead (they turn in the column
- * between) and the coordinates solved again. Every other line stays as it was.
+ * one height, and the items the structure puts level hold their middles at one height. Where the
+ * ports of a side and those heights leave no solution, the class of level items the ring's straight
+ * lines run within is let go first (`loose`, see `heldLevels`): its straight lines hold it level,
+ * at the heights their ports ask for. Only where that is not enough are the lines whose ports close
+ * the ring bent instead (they turn in the column between), and where a bundle of bent lines cannot
+ * stand the way its ports suggest, it is turned the other way (`flipped`). The coordinates are
+ * solved again after each; every other box and line stays as it was.
  */
 function placeBending(
   problem: Problem,
@@ -275,22 +280,67 @@ function placeBending(
   corridors: Corridors,
   routes: Routes,
   bent: ReadonlySet<string> = new Set(),
+  loose: ReadonlySet<string> = new Set(),
+  flipped: ReadonlySet<string> = new Set(),
   attempt = 0,
 ): { tracks: Tracks; sized: Problem; placed: Placed } {
-  const tracks = tracksOf(problem, layers, corridors, routes, { bent })
+  const tracks = tracksOf(problem, layers, corridors, routes, { bent, flipped })
   const sized = needsOf(problem, tracks)
+  const straight = sized.lines.flatMap((l): [string, string][] =>
+    tracks.across.has(l.id) ? [[l.a.item, l.b.item]] : [],
+  )
+  const held =
+    loose.size === 0 ? sized : { ...sized, level: heldLevels(sized.level, straight, loose) }
   try {
-    return { tracks, sized, placed: placeAll(sized, ranks, layers, corridors, tracks) }
+    return { tracks, sized, placed: placeAll(held, ranks, layers, corridors, tracks) }
   } catch (e) {
     if (!(e instanceof CycleError) || attempt >= BEND_ATTEMPTS) throw e
-    const more = new Set(bent)
     const ports = new Map([...tracks.entities.values()].map((p) => [String(p.id), p]))
+    const lines = new Set<string>()
     for (const name of e.unknowns) {
       const port = /^[xy] p:(.*)$/.exec(name)?.[1]
       for (const end of (port === undefined ? undefined : ports.get(port))?.ends ?? [])
-        more.add(end.line)
+        lines.add(end.line)
     }
-    if (more.size === bent.size) throw e
-    return placeBending(problem, ranks, layers, corridors, routes, more, attempt + 1)
+    // first, the classes of level items the ring's straight lines run within
+    const classOf = levelClasses(sized.level)
+    const release = new Set(loose)
+    for (const line of sized.lines) {
+      if (!lines.has(line.id) || !tracks.across.has(line.id)) continue
+      const c = classOf(line.a.item)
+      if (c !== undefined && c === classOf(line.b.item)) release.add(c)
+    }
+    if (release.size > loose.size)
+      return placeBending(
+        problem,
+        ranks,
+        layers,
+        corridors,
+        routes,
+        bent,
+        release,
+        flipped,
+        attempt + 1,
+      )
+    // then the lines themselves
+    const more = new Set([...bent, ...lines])
+    if (more.size > bent.size)
+      return placeBending(
+        problem,
+        ranks,
+        layers,
+        corridors,
+        routes,
+        more,
+        loose,
+        flipped,
+        attempt + 1,
+      )
+    // last, the bundles of bent lines turned the other way
+    const turn = new Set(flipped)
+    for (const [key, bundle] of tracks.bundles)
+      if (!flipped.has(key) && bundle.lines.some((l) => lines.has(l.line))) turn.add(key)
+    if (turn.size === flipped.size) throw e
+    return placeBending(problem, ranks, layers, corridors, routes, bent, loose, turn, attempt + 1)
   }
 }
