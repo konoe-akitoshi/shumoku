@@ -49,7 +49,7 @@ import type {
 } from './types.js'
 
 /** How many recent events to scan when surfacing alerts. */
-const ALERT_EVENT_LIMIT = 300
+const ALERT_EVENT_LIMIT = 2000
 
 export class AristaCvCuePlugin
   implements DataSourcePlugin, HostsCapable, MetricsCapable, AlertsCapable, TopologyCapable
@@ -237,13 +237,19 @@ export class AristaCvCuePlugin
   // ============================================================
 
   async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
-    if (!this.api) return []
+    // Thrown, not empty: the Server reads a missing alert as resolved.
+    if (!this.api) throw new Error('Arista CV-CUE plugin is not initialized')
     const events = await this.api.getPaged<CvEvent, CvEventsResponse>(
       '/events',
       (p) => p.eventList ?? [],
       undefined,
       { pageSize: 100, maxItems: ALERT_EVENT_LIMIT },
     )
+    // Cut at the cap, the list may leave open events out, and the Server reads an open alert
+    // missing from an answer as resolved: say it is incomplete instead.
+    if (events.length >= ALERT_EVENT_LIMIT) {
+      throw new Error(`More than ${ALERT_EVENT_LIMIT} events: the alert list would be incomplete`)
+    }
     // CV-CUE's `deleted` flag is set on ~every event (a retention marker, not a
     // "hide me" signal), so it isn't a filter. Active vs resolved comes from
     // `activityStatus`; option filtering matches the other plugins.

@@ -13,8 +13,8 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import type { Alert, MetricsData } from '@shumoku/core'
-import { generateId, getDatabase } from '../db/index.js'
+import type { MetricsData } from '@shumoku/core'
+import { getDatabase } from '../db/index.js'
 
 // Retention defaults (ms). Deliberately module constants for now — the
 // design reserves a settings surface, but none of these need live tuning
@@ -197,108 +197,8 @@ export class SignalStreamsService {
   }
 
   // -- alert stream ------------------------------------------------------------
-
-  /**
-   * Ingest a fetched alert batch and append STATE TRANSITIONS only:
-   * fired (new active), changed (severity moved while active), resolved
-   * (explicit resolved status — or, when `fullActiveSet` is true,
-   * disappearance from the batch). Idempotent against re-fetches of the
-   * same state: no transition → no row.
-   */
-  async ingestAlerts(
-    sourceId: string,
-    topologyId: string | null,
-    alerts: readonly Alert[],
-    options: { fullActiveSet?: boolean; at?: number } = {},
-  ): Promise<number> {
-    const at = options.at ?? Date.now()
-    let appended = 0
-    // rowid tiebreak: several transitions for one key can land in the
-    // same millisecond (webhook bursts, test batches) — "latest" must be
-    // insertion order, not an arbitrary pick among `at` ties.
-    const lastOf = this.db.query(
-      `SELECT transition, severity FROM alert_events
-       WHERE source_id = ? AND alert_key = ?
-       ORDER BY at DESC, rowid DESC LIMIT 1`,
-    )
-    const seen = new Set<string>()
-    for (const alert of alerts) {
-      const key = alert.id
-      seen.add(key)
-      const last = lastOf.get(sourceId, key) as { transition: string; severity: string } | undefined
-      if (alert.status === 'active') {
-        if (!last || last.transition === 'resolved') {
-          await this.appendAlertEvent(sourceId, topologyId, key, 'fired', alert, at)
-          appended++
-        } else if (last.severity !== alert.severity) {
-          await this.appendAlertEvent(sourceId, topologyId, key, 'changed', alert, at)
-          appended++
-        }
-      } else if (last && last.transition !== 'resolved') {
-        await this.appendAlertEvent(sourceId, topologyId, key, 'resolved', alert, at)
-        appended++
-      }
-    }
-    // Disappearance = resolution, but ONLY when the caller guarantees the
-    // batch is the complete active set (an unfiltered poll). A filtered
-    // query must never resolve alerts it simply didn't ask about.
-    if (options.fullActiveSet) {
-      const open = this.db
-        .query(
-          `SELECT alert_key, severity FROM alert_events a
-           WHERE source_id = ?
-             AND rowid = (SELECT b.rowid FROM alert_events b
-                          WHERE b.source_id = a.source_id AND b.alert_key = a.alert_key
-                          ORDER BY b.at DESC, b.rowid DESC LIMIT 1)
-             AND transition != 'resolved'`,
-        )
-        .all(sourceId) as { alert_key: string; severity: Alert['severity'] }[]
-      for (const row of open) {
-        if (seen.has(row.alert_key)) continue
-        await this.appendAlertEvent(
-          sourceId,
-          topologyId,
-          row.alert_key,
-          'resolved',
-          { id: row.alert_key, severity: row.severity, status: 'resolved' },
-          at,
-        )
-        appended++
-      }
-    }
-    return appended
-  }
-
-  private async appendAlertEvent(
-    sourceId: string,
-    topologyId: string | null,
-    alertKey: string,
-    transition: 'fired' | 'changed' | 'resolved',
-    alert: Partial<Alert> & { severity: Alert['severity'] },
-    at: number,
-  ): Promise<void> {
-    try {
-      this.db
-        .query(
-          `INSERT INTO alert_events
-             (id, topology_id, source_id, alert_key, transition, severity, node_id, at, payload_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .run(
-          await generateId(),
-          topologyId,
-          sourceId,
-          alertKey,
-          transition,
-          alert.severity,
-          alert.nodeId ?? null,
-          at,
-          JSON.stringify(alert),
-        )
-    } catch (err) {
-      console.error('[SignalStreams] alert_events insert failed:', err)
-    }
-  }
+  // Written by the alert collector (`alert-collector.ts`), which keeps each source's state;
+  // this service only prunes the history (`housekeeping`).
 
   // -- housekeeping --------------------------------------------------------------
 

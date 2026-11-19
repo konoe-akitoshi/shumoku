@@ -165,8 +165,7 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable, Connectio
     try {
       const response = await this.fetch('/api/alertmanager/grafana/api/v2/alerts')
       if (!response.ok) {
-        console.error('[GrafanaPlugin] Alertmanager API error:', response.status)
-        return []
+        throw new Error(`Grafana Alertmanager API error: HTTP ${response.status}`)
       }
 
       // Grafana's bundled Alertmanager speaks the standard /api/v2/alerts
@@ -174,8 +173,10 @@ export class GrafanaPlugin implements DataSourcePlugin, AlertsCapable, Connectio
       const raw = (await response.json()) as AlertmanagerAlert[]
       return parseAlertmanagerAlerts(raw, { source: 'grafana', query: options })
     } catch (err) {
+      // Thrown, not an empty list: a monitoring system that cannot be reached must not read as
+      // one with no alerts (a wall display would say "All clear" while blind).
       console.error('[GrafanaPlugin] Failed to fetch alerts:', err)
-      return []
+      throw err instanceof Error ? err : new Error(String(err))
     }
   }
 

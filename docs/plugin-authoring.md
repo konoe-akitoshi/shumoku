@@ -297,6 +297,25 @@ interface Alert {
 }
 ```
 
+#### The alerts contract
+
+The Server collects every alert source itself, once per interval, and keeps each alert's state
+(when it started, when it resolved); every screen reads what it collected. It asks
+`getAlerts({ activeOnly: true })` and reads an open alert **missing** from a successful answer
+as resolved. So:
+
+- **Return every alert open at the source, or throw.** Never an empty or partial list when the
+  upstream cannot be reached, the plugin is not initialised, or a page cap was hit: that would
+  resolve every alert left out. A thrown error freezes the source's alerts and shows
+  "not updating" instead.
+- **`id` names one occurrence**: unchanged while it is open, unique within the source. The same
+  id open again after it resolved is a new occurrence.
+- `startTime` is finite (unix ms) and `status` is `active` or `resolved`.
+
+`validateAlertsContract(alerts)` / `meetsAlertsContract(result)` from
+`@shumoku/core/plugin-kit` check the shape of an answer; the Server rejects an answer that
+fails it (as a failed poll). Test that a failed request throws.
+
 ---
 
 ## Alert severity mapping

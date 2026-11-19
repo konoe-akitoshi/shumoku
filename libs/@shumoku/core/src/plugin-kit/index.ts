@@ -14,6 +14,7 @@
  */
 
 export * from './alertmanager.js'
+export * from './alerts-contract.js'
 export * from './concurrency.js'
 export * from './metrics-flatten.js'
 export * from './secrets.js'

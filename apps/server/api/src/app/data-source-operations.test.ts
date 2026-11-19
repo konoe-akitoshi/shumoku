@@ -32,7 +32,12 @@ function createStore(overrides: Partial<DataSourceService> = {}): DataSourceServ
 }
 
 describe('data source operations service', () => {
-  const alertStream = { ingestAlerts: vi.fn(async () => undefined) }
+  const alertStream = {
+    read: vi.fn(async () => []),
+    refresh: vi.fn(async () => undefined),
+    sourceState: vi.fn(() => null),
+    collected: vi.fn(() => []),
+  }
 
   it('updates persisted health after a connection test', async () => {
     const store = createStore()
@@ -76,5 +81,32 @@ describe('data source operations service', () => {
 
     await expect(service.getConfigOptions('missing', 'site')).resolves.toBeNull()
     await expect(service.getConfigOptions('source-1', 'site')).resolves.toEqual([])
+  })
+})
+
+describe('alerts through the collection', () => {
+  it('reads what the Server collected', async () => {
+    const collected = [
+      { id: 'a', severity: 'high', title: 't', startTime: 1, status: 'active', source: 's' },
+    ]
+    const alerts = {
+      read: vi.fn(async () => collected),
+      refresh: vi.fn(async () => undefined),
+      sourceState: vi.fn(() => ({
+        state: 'ok' as const,
+        lastSuccessAt: 5,
+        lastAttemptAt: 5,
+        lastError: null,
+        failCount: 0,
+      })),
+      collected: vi.fn(() => [{ status: 'active' as const }, { status: 'resolved' as const }]),
+    }
+    const store = createStore({
+      hasAlertsCapability: vi.fn(async () => true),
+    })
+    const service = createDataSourceOperationsService(store, alerts)
+    await expect(service.getAlerts('s1', { activeOnly: true })).resolves.toEqual(collected)
+    expect(alerts.read).toHaveBeenCalledWith('s1', { activeOnly: true })
+    expect(service.getAlertCollection('s1')).toMatchObject({ state: 'ok', openCount: 1 })
   })
 })

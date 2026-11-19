@@ -1043,6 +1043,9 @@
           },
           "updatedAt": {
             "type": "integer"
+          },
+          "polling": {
+            "$ref": "#/components/schemas/PollingOverride"
           }
         },
         "required": [
@@ -1055,6 +1058,19 @@
           "createdAt",
           "updatedAt"
         ]
+      },
+      "PollingOverride": {
+        "type": "object",
+        "properties": {
+          "alertsMs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "metricsMs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       },
       "ConfigOptionsResult": {
         "type": "object",
@@ -1506,6 +1522,52 @@
           "startTime",
           "status",
           "source"
+        ]
+      },
+      "AlertCollection": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failing",
+              "never",
+              "off"
+            ]
+          },
+          "lastSuccessAt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lastAttemptAt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "failCount": {
+            "type": "number"
+          },
+          "openCount": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "state",
+          "lastSuccessAt",
+          "lastAttemptAt",
+          "lastError",
+          "failCount",
+          "openCount"
         ]
       },
       "NativeApiResult": {
@@ -2054,6 +2116,9 @@
           "configJson": {
             "type": "string",
             "minLength": 1
+          },
+          "polling": {
+            "$ref": "#/components/schemas/PollingOverride"
           }
         },
         "required": [
@@ -2076,6 +2141,9 @@
           "configJson": {
             "type": "string",
             "minLength": 1
+          },
+          "polling": {
+            "$ref": "#/components/schemas/PollingOverride"
           }
         }
       },
@@ -5712,6 +5780,126 @@
           }
         },
         "operationId": "getDatasourcesByIdAlerts"
+      }
+    },
+    "/datasources/{id}/alerts/collection": {
+      "get": {
+        "tags": [
+          "Data Sources"
+        ],
+        "summary": "How the Server's collection of a data source's alerts goes",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertCollection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The data source does not report alerts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getDatasourcesByIdAlertsCollection"
+      }
+    },
+    "/datasources/{id}/alerts/refresh": {
+      "post": {
+        "tags": [
+          "Data Sources"
+        ],
+        "summary": "Collect a data source's alerts now",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Collection state after the poll",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertCollection"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The data source does not report alerts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postDatasourcesByIdAlertsRefresh"
       }
     },
     "/datasources/{id}/_native": {

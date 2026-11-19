@@ -94,6 +94,8 @@ const services: AppServices = {
       discoverMetrics: async () => [],
       getFilterOptions: async () => null,
       getAlerts: async () => null,
+      getAlertCollection: () => null,
+      refreshAlerts: async () => null,
       callNative: async () => ({ ok: false, status: 404, error: 'Not executed' }),
     },
     scan: {

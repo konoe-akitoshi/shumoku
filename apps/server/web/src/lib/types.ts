@@ -87,12 +87,16 @@ export interface DataSource {
   failCount: number
   createdAt: number
   updatedAt: number
+  /** This source's own polling intervals (ms); absent: the Server's defaults (Settings). */
+  polling?: { alertsMs?: number; metricsMs?: number }
 }
 
 export interface DataSourceInput {
   name: string
   type: string
   configJson: string
+  /** `{}` clears the override. */
+  polling?: { alertsMs?: number; metricsMs?: number }
 }
 
 /**
@@ -314,41 +318,6 @@ export interface WidgetPosition {
   h: number
 }
 
-// Widget definition for registry
-export interface WidgetDefinition {
-  type: string
-  displayName: string
-  icon: string
-  defaultSize: { w: number; h: number }
-  minSize?: { w: number; h: number }
-  configSchema?: Record<string, unknown>
-}
-
-// Topology widget config
-export interface TopologyWidgetConfig {
-  topologyId: string
-  showMetrics: boolean
-  showLabels: boolean
-  interactive: boolean
-}
-
-// Metrics widget config
-export interface MetricsWidgetConfig {
-  dataSourceId?: string
-  metricType: 'gauge' | 'status'
-  title: string
-}
-
-// Health widget config
-export interface HealthWidgetConfig {
-  title: string
-}
-
-// DataSource widget config
-export interface DataSourceWidgetConfig {
-  title: string
-}
-
 // Render Context types
 export interface Position {
   x: number
@@ -389,13 +358,4 @@ export interface TopologyContext {
   metrics: MetricsData
   metricsSourceId?: string
   mapping?: MetricsMapping
-}
-
-// Alert widget config (web UI-only, not a core domain concept)
-export interface AlertWidgetConfig {
-  dataSourceId: string
-  title?: string
-  maxItems?: number
-  showResolved?: boolean
-  autoRefresh?: number // seconds
 }

@@ -958,6 +958,13 @@ export const settings = {
     if (!data) return contractError(error, response)
     return data
   },
+  delete: async (key: string) => {
+    const { data, error, response } = await contractClient.DELETE('/settings/{key}', {
+      params: { path: { key } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 // Dashboards API

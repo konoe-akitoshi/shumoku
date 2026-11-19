@@ -30,7 +30,6 @@ Each plugin self-describes via `registry.registerDescriptor({ type, displayName,
 | `url` | string (uri) | ✅ | — | Zabbix base URL, e.g. `https://zabbix.example.com` |
 | `token` | string (password) | ✅ | — | API token |
 | `insecure` | boolean | | `false` | Skip TLS verification. Self-signed certs in trusted networks only |
-| `pollInterval` | number (ms) | | `60000` | One of 5s / 10s / 30s / 1m / 5m |
 
 ## Topology options
 

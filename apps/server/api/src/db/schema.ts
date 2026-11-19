@@ -52,6 +52,8 @@ import {
   migrateObservationsToDeviceAttributes,
 } from './migrations/036_device_attributes.js'
 import migration037 from './migrations/037_device_access.sql'
+import migration038 from './migrations/038_alert_collection.sql'
+import migration039 from './migrations/039_data_source_polling.sql'
 
 /** A migration: SQL to run, or code for a change SQL can't express, such as reshaping JSON. */
 type Migration = { name: string; sql: string } | { name: string; run: (db: Database) => void }
@@ -112,6 +114,8 @@ const MIGRATIONS: Migration[] = [
     },
   },
   { name: '037_device_access.sql', sql: migration037 },
+  { name: '038_alert_collection.sql', sql: migration038 },
+  { name: '039_data_source_polling.sql', sql: migration039 },
 ]
 
 interface MigrationRecord {

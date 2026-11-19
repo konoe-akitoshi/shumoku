@@ -59,12 +59,25 @@ export interface DataSource {
   failCount: number
   createdAt: number
   updatedAt: number
+  /** This source's own polling intervals; absent: the server-wide defaults (Settings). */
+  polling?: PollingOverride
+}
+
+/**
+ * A data source's own polling intervals (ms), over the server-wide defaults. `alertsMs: 0`
+ * stops collecting its alerts.
+ */
+export interface PollingOverride {
+  alertsMs?: number
+  metricsMs?: number
 }
 
 export interface DataSourceInput {
   name: string
   type: DataSourceType
   configJson: string
+  /** `{}` clears the override. */
+  polling?: PollingOverride
 }
 
 /**
