@@ -7,10 +7,10 @@ import {
   axisResponse,
   defaultSpaceMouseSettings,
   isDown,
-  isPressed,
   isSpaceMouse,
   motionOf,
   parseReport,
+  SPACEEXPLORER_BUTTONS,
   SPACEMOUSE_PRO_BUTTONS,
   SPACEMOUSE_TWO_BUTTONS,
   spaceMouseButtons,
@@ -44,9 +44,9 @@ describe('parseReport', () => {
   it('reads the buttons (report 3), little-endian across bytes', () => {
     // Fit (bit 1) and Shift (bit 24)
     const s = parseReport(3, bytes(0b10, 0, 0, 0b1), zeroState())
-    expect(isPressed(s.buttons, SPACEMOUSE_PRO_BUTTONS.fit)).toBe(true)
-    expect(isPressed(s.buttons, SPACEMOUSE_PRO_BUTTONS.shift)).toBe(true)
-    expect(isPressed(s.buttons, SPACEMOUSE_PRO_BUTTONS.menu)).toBe(false)
+    expect(isDown(s.buttons, SPACEMOUSE_PRO_BUTTONS, 'fit')).toBe(true)
+    expect(isDown(s.buttons, SPACEMOUSE_PRO_BUTTONS, 'shift')).toBe(true)
+    expect(isDown(s.buttons, SPACEMOUSE_PRO_BUTTONS, 'menu')).toBe(false)
   })
 
   it('leaves the state alone for other reports', () => {
@@ -57,23 +57,25 @@ describe('parseReport', () => {
 
 describe('axisResponse', () => {
   it('is zero inside the deadzone', () => {
-    expect(axisResponse(15, 0.06)).toBe(0)
-    expect(axisResponse(-15, 0.06)).toBe(0)
+    expect(axisResponse(10)).toBe(0)
+    expect(axisResponse(-10)).toBe(0)
   })
 
   it('reaches ±1 at full deflection and clamps beyond', () => {
-    expect(axisResponse(350, 0.06)).toBeCloseTo(1)
-    expect(axisResponse(-1400, 0.06)).toBeCloseTo(-1)
+    expect(axisResponse(350)).toBeCloseTo(1)
+    expect(axisResponse(-1400)).toBeCloseTo(-1)
   })
 
-  it('follows the curve past the deadzone (gentle near rest)', () => {
-    expect(axisResponse(175, 0, 2)).toBeCloseTo(0.25)
-    expect(axisResponse(175, 0, 1)).toBeCloseTo(0.5)
+  it('is gentle near rest and quick when pushed', () => {
+    const half = axisResponse(175)
+    expect(half).toBeGreaterThan(0.25)
+    expect(half).toBeLessThan(0.5)
   })
 })
 
 describe('motionOf', () => {
   const settings = defaultSpaceMouseSettings()
+  const full = motionOf({ ...zeroState(), tx: 350 }, settings)?.vx ?? 0
 
   it('is nothing at rest', () => {
     expect(motionOf(zeroState(), settings)).toBeNull()
@@ -81,13 +83,12 @@ describe('motionOf', () => {
 
   it('pans with the cap pushed sideways', () => {
     const m = motionOf({ ...zeroState(), tx: 350 }, settings)
-    expect(m?.vx).toBeCloseTo(settings.panSpeed)
+    expect(m?.vx).toBeGreaterThan(0)
     expect(m?.vz).toBe(0)
   })
 
   it('zooms in with the cap pulled up', () => {
-    const m = motionOf({ ...zeroState(), tz: -350 }, settings)
-    expect(m?.vz).toBeCloseTo(settings.zoomSpeed)
+    expect(motionOf({ ...zeroState(), tz: -350 }, settings)?.vz).toBeGreaterThan(0)
   })
 
   it('passes only the stronger of pan and zoom', () => {
@@ -96,20 +97,16 @@ describe('motionOf', () => {
     expect(m?.vz).toBeGreaterThan(0)
   })
 
-  it('passes both when not dominant', () => {
-    const m = motionOf({ ...zeroState(), tx: 200, tz: -300 }, { ...settings, dominant: false })
-    expect(m?.vx).toBeGreaterThan(0)
-    expect(m?.vz).toBeGreaterThan(0)
-  })
-
   it('inverts an axis on request', () => {
     const m = motionOf({ ...zeroState(), ty: 350 }, { ...settings, invertY: true })
-    expect(m?.vy).toBeCloseTo(-settings.panSpeed)
+    expect(m?.vy).toBeCloseTo(-full)
   })
 
-  it('slows down when precise', () => {
-    const m = motionOf({ ...zeroState(), tx: 350 }, settings, true)
-    expect(m?.vx).toBeCloseTo(settings.panSpeed * 0.3)
+  it('scales with the speed and slows down when precise', () => {
+    expect(motionOf({ ...zeroState(), tx: 350 }, { ...settings, speed: 2 })?.vx).toBeCloseTo(
+      full * 2,
+    )
+    expect(motionOf({ ...zeroState(), tx: 350 }, settings, true)?.vx).toBeCloseTo(full * 0.3)
   })
 })
 
@@ -120,7 +117,8 @@ describe('spaceMouseButtons', () => {
   })
 
   it('names the SpaceExplorer buttons', () => {
-    expect(isDown(1 << 10, spaceMouseButtons(0x046d, 0xc627), 'fit')).toBe(true)
+    expect(spaceMouseButtons(0x046d, 0xc627)).toBe(SPACEEXPLORER_BUTTONS)
+    expect(isDown(1 << 10, SPACEEXPLORER_BUTTONS, 'fit')).toBe(true)
   })
 
   it('names the two buttons of a Compact', () => {

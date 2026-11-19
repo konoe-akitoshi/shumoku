@@ -35,30 +35,11 @@ export type {
 } from './lib/overlays.js'
 // Browser {@html} icon sanitization (defense-in-depth)
 export { sanitizeInlineIcon } from './lib/sanitize-icon.js'
-// SpaceMouse (WebHID) as a camera input
-export {
-  defaultSpaceMouseSettings,
-  isDown,
-  isPressed,
-  motionOf,
-  openSpaceMouse,
-  SPACEEXPLORER_BUTTONS,
-  SPACEMOUSE_PRO_BUTTONS,
-  SPACEMOUSE_TWO_BUTTONS,
-  type SpaceMouseButtons,
-  type SpaceMouseConnection,
-  type SpaceMouseSettings,
-  type SpaceMouseState,
-  type SpaceMouseStatus,
-  spaceMouseAvailability,
-  spaceMouseButtons,
-  spaceMouseSupported,
-} from './lib/spacemouse.js'
+// SpaceMouse (WebHID) as a camera input, for every diagram on the page
 export {
   attachSpaceMouse,
   connectSpaceMouse,
   onSpaceMouseChange,
-  pickCamera,
   spaceMouseConnected,
   spaceMouseOffer,
 } from './lib/spacemouse-input.js'

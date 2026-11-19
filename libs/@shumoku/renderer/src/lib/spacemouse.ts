@@ -13,7 +13,8 @@
  * `spaceMouseButtons` names them for the models it knows, after Blender's tables. 3DxWare, when running, holds the device and no report arrives; on
  * Linux the hidraw node needs a udev rule.
  *
- * The axis directions are not verified on hardware: `invertX` / `invertY` / `invertZ` set them.
+ * Tried on a SpaceExplorer (Linux, with spacenavd running). `invertX` / `invertY` / `invertZ` flip
+ * an axis.
  */
 
 import type { Motion } from './camera.js'
@@ -145,53 +146,52 @@ export const spaceMouseButtons = (vendorId: number, productId: number): SpaceMou
 /** Whether the named button is down; false for a button the model does not have. */
 export const isDown = (buttons: number, map: SpaceMouseButtons, name: string): boolean => {
   const bit = map[name]
-  return bit !== undefined && isPressed(buttons, bit)
+  return bit !== undefined && (buttons & (1 << bit)) !== 0
 }
 
-export const isPressed = (buttons: number, bit: number) => (buttons & (1 << bit)) !== 0
+// =========================================================================
+// Response
+// =========================================================================
 
+/** The raw range of the axes (the devices' logical maximum; Blender divides by it too). */
+const AXIS_RANGE = 350
+/** Fraction of the range treated as rest. */
+const DEADZONE = 0.04
+/** The curve past the deadzone: 1 would be linear; 1.5 is gentle near rest, quick when pushed. */
+const EXPONENT = 1.5
+/** At full deflection: CSS px/s of pan, and ln of the zoom per second (2.5 ≈ ×12 a second). */
+const PAN_SPEED = 2500
+const ZOOM_SPEED = 2.5
+/** The Shift button's slow mode. */
+const PRECISE = 0.3
+
+/** What a person sets for their device: the axes to flip, and a factor on the speed. */
 export interface SpaceMouseSettings {
-  /** Fraction of the range treated as rest. */
-  deadzone: number
-  /** The response curve past the deadzone: 1 is linear, higher is gentler near rest. */
-  exponent: number
-  /** Pan speed at full deflection, CSS px/s. */
-  panSpeed: number
-  /** Zoom speed at full deflection, ln of the zoom per second (2 ≈ ×7.4 a second). */
-  zoomSpeed: number
   invertX: boolean
   invertY: boolean
   invertZ: boolean
-  /** Pass only the stronger of pan and zoom, so a zoom does not drift sideways. */
-  dominant: boolean
+  speed: number
 }
 
 export const defaultSpaceMouseSettings = (): SpaceMouseSettings => ({
-  deadzone: 0.04,
-  exponent: 1.5,
-  panSpeed: 2500,
-  zoomSpeed: 2.5,
   invertX: false,
   invertY: false,
   invertZ: false,
-  dominant: true,
+  speed: 1,
 })
 
-/** The raw range of the axes (the devices' logical maximum; Blender divides by it too). */
-export const AXIS_RANGE = 350
-
-/** −1…1 from a raw axis: zero inside the deadzone, then `t ** exponent` (gentle near rest). */
-export function axisResponse(raw: number, deadzone: number, exponent = 1.5): number {
+/** −1…1 from a raw axis: zero inside the deadzone, then the response curve. */
+export function axisResponse(raw: number): number {
   const a = Math.max(-1, Math.min(1, raw / AXIS_RANGE))
   const m = Math.abs(a)
-  if (m <= deadzone) return 0
-  const t = (m - deadzone) / (1 - deadzone)
-  return Math.sign(a) * t ** exponent
+  if (m <= DEADZONE) return 0
+  return Math.sign(a) * ((m - DEADZONE) / (1 - DEADZONE)) ** EXPONENT
 }
 
 /**
  * The view's motion from the cap. Pushing the cap right moves the picture right (as if moving
- * the paper), pulling it up zooms in; `precise` slows it (the Shift button).
+ * the paper), pulling it up zooms in; only the stronger of pan and zoom passes, so a zoom does not
+ * drift sideways. `precise` slows it (the Shift button).
  */
 export function motionOf(
   state: SpaceMouseState,
@@ -199,26 +199,18 @@ export function motionOf(
   precise = false,
 ): Motion | null {
   const sign = (invert: boolean) => (invert ? -1 : 1)
-  const r = (raw: number) => axisResponse(raw, settings.deadzone, settings.exponent)
-  let x = r(state.tx) * sign(settings.invertX)
-  let y = r(state.ty) * sign(settings.invertY)
-  let z = -r(state.tz) * sign(settings.invertZ)
-  if (settings.dominant) {
-    const pan = Math.hypot(x, y)
-    if (Math.abs(z) > pan) {
-      x = 0
-      y = 0
-    } else {
-      z = 0
-    }
+  let x = axisResponse(state.tx) * sign(settings.invertX)
+  let y = axisResponse(state.ty) * sign(settings.invertY)
+  let z = -axisResponse(state.tz) * sign(settings.invertZ)
+  if (Math.abs(z) > Math.hypot(x, y)) {
+    x = 0
+    y = 0
+  } else {
+    z = 0
   }
   if (x === 0 && y === 0 && z === 0) return null
-  const scale = precise ? 0.3 : 1
-  return {
-    vx: x * settings.panSpeed * scale,
-    vy: y * settings.panSpeed * scale,
-    vz: z * settings.zoomSpeed * scale,
-  }
+  const scale = settings.speed * (precise ? PRECISE : 1)
+  return { vx: x * PAN_SPEED * scale, vy: y * PAN_SPEED * scale, vz: z * ZOOM_SPEED * scale }
 }
 
 // =========================================================================
@@ -230,7 +222,7 @@ interface HidCollection {
   readonly usagePage: number
   readonly usage: number
 }
-interface HidDevice extends EventTarget {
+export interface HidDevice extends EventTarget {
   readonly opened: boolean
   readonly collections: readonly HidCollection[]
   readonly productId: number
@@ -242,6 +234,8 @@ interface HidDevice extends EventTarget {
 interface HidInputReportEvent extends Event {
   readonly reportId: number
   readonly data: DataView
+}
+interface HidConnectionEvent extends Event {
   readonly device: HidDevice
 }
 interface Hid extends EventTarget {
@@ -250,13 +244,12 @@ interface Hid extends EventTarget {
 }
 interface HidFilter {
   vendorId?: number
-  productId?: number
   usagePage?: number
   usage?: number
 }
 
 /** 3Dconnexion's vendor ids (Logitech's for older models), as a multi-axis controller. */
-export const SPACEMOUSE_FILTERS: HidFilter[] = [
+const SPACEMOUSE_FILTERS: HidFilter[] = [
   { vendorId: 0x256f, usagePage: 0x01, usage: 0x08 },
   { vendorId: 0x046d, usagePage: 0x01, usage: 0x08 },
 ]
@@ -273,53 +266,49 @@ export const isSpaceMouse = (d: {
   (d.vendorId === 0x256f || d.vendorId === 0x046d) &&
   d.collections.some((c) => c.usagePage === 0x01 && c.usage === 0x08)
 
-const hidOf = (): Hid | undefined => {
-  if (typeof navigator === 'undefined' || !('hid' in navigator)) return undefined
-  return navigator.hid as Hid
-}
-
-/** Whether this browser can reach a SpaceMouse at all. */
-export const spaceMouseSupported = () => hidOf() !== undefined
+const hidOf = (): Hid | undefined =>
+  typeof navigator !== 'undefined' && 'hid' in navigator ? (navigator.hid as Hid) : undefined
 
 /**
- * Why a SpaceMouse cannot be reached here, or `ok`: WebHID exists only in a secure context (HTTPS
- * or localhost) of Chrome / Edge, and only where the `hid` Permissions Policy allows it (a page in
- * a frame of another site does not, unless the frame says `allow="hid"`).
+ * Whether a SpaceMouse can be reached here: WebHID exists only in a secure context (HTTPS or
+ * localhost) of Chrome / Edge, and only where the `hid` Permissions Policy allows it (not in
+ * another site's frame unless it says `allow="hid"`).
  */
 export function spaceMouseAvailability(): 'ok' | 'insecure' | 'blocked' | 'unsupported' {
   if (typeof window === 'undefined') return 'unsupported'
   if (!window.isSecureContext) return 'insecure'
-  if (!spaceMouseSupported()) return 'unsupported'
+  if (!hidOf()) return 'unsupported'
   const policy = (document as Document & { featurePolicy?: { allowsFeature(f: string): boolean } })
     .featurePolicy
   if (policy && !policy.allowsFeature('hid')) return 'blocked'
   return 'ok'
 }
 
-/** A page-wide listener for a granted SpaceMouse being plugged in; returns the remover. */
+/** A SpaceMouse this site may already use (granted before, and still plugged in). */
+export async function grantedSpaceMouse(): Promise<HidDevice | null> {
+  const devices = (await hidOf()?.getDevices()) ?? []
+  return devices.find(isSpaceMouse) ?? null
+}
+
+/**
+ * Ask the user to pick a SpaceMouse. Call it straight from the click: the browser shows its picker
+ * only within a user gesture. Null when the user picked nothing.
+ */
+export async function requestSpaceMouse(): Promise<HidDevice | null> {
+  const devices = (await hidOf()?.requestDevice({ filters: SPACEMOUSE_FILTERS })) ?? []
+  return devices.find(isSpaceMouse) ?? null
+}
+
+/** Call `listener` when a granted SpaceMouse is plugged in; returns the remover. */
 export function onSpaceMousePlugged(listener: () => void): () => void {
   const hid = hidOf()
   if (!hid) return () => {}
   const onConnect = (e: Event) => {
-    const device = (e as Event & { device?: HidDevice }).device
-    if (device && isSpaceMouse(device)) listener()
+    if (isSpaceMouse((e as HidConnectionEvent).device)) listener()
   }
   hid.addEventListener('connect', onConnect)
   return () => hid.removeEventListener('connect', onConnect)
 }
-
-export type SpaceMouseStatus =
-  /** No WebHID: not Chrome / Edge, not a secure context, or blocked by a Permissions Policy. */
-  | { kind: 'unsupported' }
-  /** No device has been granted yet: `request` needs a user gesture. */
-  | { kind: 'needs-permission' }
-  /** The page may not use WebHID (a Permissions Policy, e.g. in another site's frame). */
-  | { kind: 'blocked' }
-  /** The device could not be opened: on Linux usually a missing udev rule, else another app. */
-  | { kind: 'open-failed'; message: string }
-  /** Opened; reports arrive only when the cap moves, and never while 3DxWare holds the device. */
-  | { kind: 'connected'; name: string; buttons: SpaceMouseButtons }
-  | { kind: 'disconnected' }
 
 export interface SpaceMouseConnection {
   readonly name: string
@@ -329,45 +318,24 @@ export interface SpaceMouseConnection {
 }
 
 /**
- * Open a SpaceMouse: one already granted to this site, or (with `request`, in a user gesture) one
- * the user picks. `onState` gets every new state, `onStatus` what happened.
+ * Open a SpaceMouse: `onState` gets every new state, `onDisconnect` is called once when it goes.
+ * Resolves to the connection, or to the error the browser gave (on Linux usually a missing udev
+ * rule; on Windows / macOS 3DxWare may hold the device).
  */
-export async function openSpaceMouse(options: {
-  request: boolean
-  onState: (state: SpaceMouseState, previous: SpaceMouseState) => void
-  onStatus: (status: SpaceMouseStatus) => void
-}): Promise<SpaceMouseConnection | null> {
+export async function openSpaceMouse(
+  device: HidDevice,
+  on: {
+    onState: (state: SpaceMouseState, previous: SpaceMouseState) => void
+    onDisconnect: () => void
+  },
+): Promise<SpaceMouseConnection | { error: unknown }> {
   const hid = hidOf()
-  if (!hid) {
-    options.onStatus({ kind: 'unsupported' })
-    return null
-  }
-  const isSecurity = (err: unknown) => err instanceof DOMException && err.name === 'SecurityError'
-  let devices: HidDevice[]
-  try {
-    devices = options.request
-      ? await hid.requestDevice({ filters: SPACEMOUSE_FILTERS })
-      : await hid.getDevices()
-  } catch (err) {
-    options.onStatus(
-      isSecurity(err) ? { kind: 'blocked' } : { kind: 'open-failed', message: String(err) },
-    )
-    return null
-  }
-  const device = devices.find(isSpaceMouse)
-  if (!device) {
-    options.onStatus({ kind: 'needs-permission' })
-    return null
-  }
+  if (!hid) return { error: new Error('WebHID is not available') }
   try {
     if (!device.opened) await device.open()
-  } catch (err) {
-    // Opened meanwhile (another open of the same device won the race): use it.
-    const opening = err instanceof DOMException && err.name === 'InvalidStateError'
-    if (!opening || !device.opened) {
-      options.onStatus({ kind: 'open-failed', message: String(err) })
-      return null
-    }
+  } catch (error) {
+    // Opened meanwhile by another open of the same device: use it.
+    if (!device.opened) return { error }
   }
 
   let state = zeroState()
@@ -377,28 +345,26 @@ export async function openSpaceMouse(options: {
     if (next === state) return
     const previous = state
     state = next
-    options.onState(state, previous)
+    on.onState(state, previous)
   }
   const detach = () => {
     device.removeEventListener('inputreport', onReport)
     hid.removeEventListener('disconnect', onDisconnect)
   }
   const onDisconnect = (e: Event) => {
-    if ((e as Event & { device?: HidDevice }).device !== device) return
+    if ((e as HidConnectionEvent).device !== device) return
     detach()
     const previous = state
     state = zeroState()
-    options.onState(state, previous)
-    options.onStatus({ kind: 'disconnected' })
+    on.onState(state, previous)
+    on.onDisconnect()
   }
   device.addEventListener('inputreport', onReport)
   hid.addEventListener('disconnect', onDisconnect)
-  const buttons = spaceMouseButtons(device.vendorId, device.productId)
-  options.onStatus({ kind: 'connected', name: device.productName, buttons })
 
   return {
     name: device.productName,
-    buttons,
+    buttons: spaceMouseButtons(device.vendorId, device.productId),
     async close() {
       detach()
       try {

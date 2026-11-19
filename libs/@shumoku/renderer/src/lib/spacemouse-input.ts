@@ -4,12 +4,11 @@
 
 /**
  * The SpaceMouse as a companion to the mouse, for every diagram on the page: the cap pans and
- * zooms, and the buttons run `BINDINGS` (Fit fits; Shift, held, slows the cap down). One device
- * per page; each camera that attaches can be driven, and the one the pointer is over (else the one
- * it was last over, else the last attached) is. Connecting needs a user gesture once
- * (`connectSpaceMouse`); afterwards a granted device is opened when a camera attaches and when it
- * is plugged back in. Chrome keeps the grant only for devices with a serial number: one without
- * (a SpaceExplorer) is picked again after being unplugged.
+ * zooms, Fit fits, Shift (held) slows the cap down. One device per page; each camera that attaches
+ * can be driven, and the one the pointer is over (else the one it was last over, else the last
+ * attached) is. Connecting needs a click once (`connectSpaceMouse`); afterwards a granted device
+ * is opened when a camera attaches and when it is plugged back in. Chrome keeps the grant only for
+ * devices with a serial number: one without (a SpaceExplorer) is picked again after unplugging.
  *
  * Browser only (WebHID: Chrome / Edge, HTTPS or localhost). Nothing runs when the module is
  * loaded, so a server render can import it. Settings live in this browser:
@@ -21,15 +20,16 @@
 import type { Camera, MotionHandle } from './camera.js'
 import {
   defaultSpaceMouseSettings,
+  grantedSpaceMouse,
+  type HidDevice,
   isDown,
   motionOf,
   onSpaceMousePlugged,
   openSpaceMouse,
-  type SpaceMouseButtons,
+  requestSpaceMouse,
   type SpaceMouseConnection,
   type SpaceMouseSettings,
   type SpaceMouseState,
-  type SpaceMouseStatus,
   spaceMouseAvailability,
 } from './spacemouse.js'
 
@@ -42,27 +42,15 @@ const stored = (key: string): string => {
 }
 
 function readSettings(): SpaceMouseSettings {
-  const s = defaultSpaceMouseSettings()
   const invert = stored('shumoku.spacemouse.invert').split(',')
-  s.invertX = invert.includes('x')
-  s.invertY = invert.includes('y')
-  s.invertZ = invert.includes('z')
   const speed = Number.parseFloat(stored('shumoku.spacemouse.speed'))
-  if (speed > 0) {
-    s.panSpeed *= speed
-    s.zoomSpeed *= speed
+  return {
+    ...defaultSpaceMouseSettings(),
+    invertX: invert.includes('x'),
+    invertY: invert.includes('y'),
+    invertZ: invert.includes('z'),
+    ...(speed > 0 && { speed }),
   }
-  return s
-}
-
-/** What each named button does: a command on press, or `precise` while held. */
-type Binding = 'fit' | 'zoomIn' | 'zoomOut' | 'precise'
-const BINDINGS: Readonly<Record<string, Binding>> = { fit: 'fit', shift: 'precise' }
-
-const pressCommands: Record<Exclude<Binding, 'precise'>, (c: Camera) => void> = {
-  fit: (c) => c.reset(),
-  zoomIn: (c) => c.zoomBy(1.25),
-  zoomOut: (c) => c.zoomBy(0.8),
 }
 
 /**
@@ -86,13 +74,9 @@ interface Attached {
   motion: MotionHandle
 }
 
-let settings: SpaceMouseSettings | null = null
+let settings = defaultSpaceMouseSettings()
 let debug = false
 let connection: SpaceMouseConnection | null = null
-/** The one open in flight: a reconnect and a click must not open the device twice. */
-let opening: Promise<string | null> | null = null
-/** The connected model's buttons. */
-let buttons: SpaceMouseButtons = {}
 let state: SpaceMouseState | null = null
 const attached: Attached[] = []
 /** The camera driven last (the pointer was over it, or it was the only choice). */
@@ -100,29 +84,18 @@ let driven: Camera | null = null
 const listeners = new Set<() => void>()
 /** Page-wide listeners, set up with the first camera and removed with the last. */
 let unlisten: (() => void) | null = null
+/** Opens run one after another, so a reconnect and a click never open the device twice. */
+let queue: Promise<unknown> = Promise.resolve()
 
 const notify = () => {
   for (const l of listeners) l()
 }
 
-/** The camera to drive now; remembers it, so leaving the diagrams keeps driving it. */
-function current(): Camera | null {
-  driven = pickCamera(
-    attached.map((a) => a.camera),
-    driven,
-  )
-  return driven
-}
-
 function sampleFor(camera: Camera) {
-  // Read once a frame: no state changes here, only whether this camera is the one driven.
+  // Read once a frame: nothing changes here, only whether this camera is the one driven.
   return () => {
-    if (!state || !settings || !document.hasFocus() || driven !== camera) return null
-    const held = state.buttons
-    const precise = Object.entries(BINDINGS).some(
-      ([name, binding]) => binding === 'precise' && isDown(held, buttons, name),
-    )
-    return motionOf(state, settings, precise)
+    if (!state || !document.hasFocus() || driven !== camera) return null
+    return motionOf(state, settings, isDown(state.buttons, connection?.buttons ?? {}, 'shift'))
   }
 }
 
@@ -131,83 +104,84 @@ function onState(next: SpaceMouseState, previous: SpaceMouseState) {
   if (debug) console.info('[spacemouse]', next)
   // The device follows the window's focus, buttons and cap alike.
   if (!document.hasFocus()) return
-  const camera = current()
-  const pressed = next.buttons & ~previous.buttons
-  for (const [name, binding] of Object.entries(BINDINGS)) {
-    if (binding === 'precise' || !camera || !isDown(pressed, buttons, name)) continue
-    pressCommands[binding](camera)
-  }
+  driven = pickCamera(
+    attached.map((a) => a.camera),
+    driven,
+  )
+  const buttons = connection?.buttons ?? {}
+  if (driven && isDown(next.buttons & ~previous.buttons, buttons, 'fit')) driven.reset()
   for (const a of attached) a.motion.wake()
 }
 
-function describe(status: SpaceMouseStatus): string | null {
-  switch (status.kind) {
-    case 'unsupported':
-      return 'A SpaceMouse needs WebHID: open this page in Chrome or Edge, over HTTPS (or on localhost).'
-    case 'blocked':
-      return 'This page may not use a SpaceMouse here (it is shown inside another site; the frame needs allow="hid").'
-    case 'open-failed':
-      return `The SpaceMouse could not be opened (${status.message}). On Linux, add a udev rule giving your user access to its hidraw device (spacenavd can keep running). On Windows / macOS, 3DxWare may be holding it.`
-    default:
-      return null
-  }
+function onDisconnect() {
+  connection = null
+  state = null
+  notify()
 }
 
-/** Open the device, once at a time; the message to show the user, if something went wrong. */
-function open(request: boolean): Promise<string | null> {
-  if (connection) return Promise.resolve(null)
-  // A reconnect in flight: wait for it, then pick the device only if it found none.
-  if (opening) {
-    return opening.then((message) => (connection || !request ? message : open(true)))
+/** What to tell the user when a SpaceMouse cannot be used here. */
+function problem(reason: 'insecure' | 'blocked' | 'unsupported' | { error: unknown }): string {
+  if (reason === 'insecure') {
+    return 'A SpaceMouse needs this page to be opened over HTTPS (or on localhost): browsers allow WebHID only there.'
   }
-  settings ??= readSettings()
+  if (reason === 'unsupported')
+    return 'A SpaceMouse needs WebHID: open this page in Chrome or Edge.'
+  if (
+    reason === 'blocked' ||
+    (reason.error instanceof DOMException && reason.error.name === 'SecurityError')
+  ) {
+    return 'This page may not use a SpaceMouse here (it is shown inside another site; the frame needs allow="hid").'
+  }
+  return `The SpaceMouse could not be opened (${String(reason.error)}). On Linux, add a udev rule giving your user access to its hidraw device (spacenavd can keep running). On Windows / macOS, 3DxWare may be holding it.`
+}
+
+/** Open a device unless one is open already; the problem to tell the user, else null. */
+async function use(device: HidDevice | null): Promise<string | null> {
+  if (connection || !device) return null
+  settings = readSettings()
   debug = stored('shumoku.spacemouse.debug') === '1'
-  let message: string | null = null
-  opening = openSpaceMouse({
-    request,
-    onState,
-    onStatus: (status) => {
-      if (status.kind === 'disconnected') {
-        connection = null
-        state = null
-        buttons = {}
-        notify()
-      }
-      if (status.kind === 'connected') {
-        buttons = status.buttons
-        console.info(`[spacemouse] connected: ${status.name}`)
-      }
-      message = describe(status) ?? message
-    },
+  const opened = await openSpaceMouse(device, { onState, onDisconnect })
+  if ('error' in opened) return problem(opened)
+  connection = opened
+  console.info(`[spacemouse] connected: ${opened.name}`)
+  notify()
+  return null
+}
+
+/** Run opens one at a time. */
+function serial<T>(task: () => Promise<T>): Promise<T> {
+  const run = queue.then(task, task)
+  queue = run.catch(() => {})
+  return run
+}
+
+/** Open a SpaceMouse granted before, if one is plugged in. */
+function reconnect(): void {
+  void serial(async () => {
+    if (connection) return
+    const message = await use(await grantedSpaceMouse())
+    if (message) console.warn(`[spacemouse] ${message}`)
   })
-    .then((opened) => {
-      connection = opened
-      notify()
-      if (message && !request) console.warn(`[spacemouse] ${message}`)
-      return request ? message : null
-    })
-    .finally(() => {
-      opening = null
-    })
-  return opening
 }
 
 /**
- * Connect, from a user gesture: asks the user to pick the device the first time. Resolves to a
- * message for the user when it failed (WebHID missing, not HTTPS, the device not openable), else
- * null.
+ * Connect, from a click: the browser's picker opens at once (it must, within the gesture), the
+ * first time; the device is then opened after any reconnect in flight. Resolves to a message for
+ * the user when it cannot work (not HTTPS, no WebHID, the device not openable), else null.
  */
 export function connectSpaceMouse(): Promise<string | null> {
   const availability = spaceMouseAvailability()
-  if (availability === 'insecure') {
-    return Promise.resolve(
-      'A SpaceMouse needs this page to be opened over HTTPS (or on localhost): browsers allow WebHID only there.',
-    )
-  }
-  if (availability !== 'ok') {
-    return Promise.resolve(describe({ kind: availability }))
-  }
-  return open(true)
+  if (availability !== 'ok') return Promise.resolve(problem(availability))
+  const picked = requestSpaceMouse()
+  // Awaited below, maybe after a reconnect: not an unhandled rejection meanwhile.
+  picked.catch(() => {})
+  return serial(async () => {
+    try {
+      return await use(await picked)
+    } catch (error) {
+      return problem({ error })
+    }
+  })
 }
 
 /**
@@ -234,17 +208,18 @@ export function attachSpaceMouse(camera: Camera): () => void {
   attached.push(entry)
   if (spaceMouseAvailability() === 'ok') {
     if (!unlisten) {
+      // A report that stops on blur would leave the cap held; let go of it.
       const onBlur = () => {
         if (state) state = { ...state, tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 }
       }
       window.addEventListener('blur', onBlur)
-      const unplug = onSpaceMousePlugged(() => void open(false))
+      const unplug = onSpaceMousePlugged(reconnect)
       unlisten = () => {
         window.removeEventListener('blur', onBlur)
         unplug()
       }
     }
-    void open(false)
+    reconnect()
   }
   return () => {
     entry.motion.remove()
