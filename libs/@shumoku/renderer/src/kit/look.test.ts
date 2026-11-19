@@ -23,7 +23,7 @@ import { captionContent, fit, nodeContent } from './content.js'
 import { groupInsets, groupLook } from './group-look.js'
 import { hullLook } from './hull-look.js'
 import { createKit } from './measure.js'
-import { portLook } from './port-look.js'
+import { portLines, portLook } from './port-look.js'
 import type { Box } from './scene.js'
 
 const kit = createKit()
@@ -206,9 +206,35 @@ describe('portLook', () => {
   it('draws the marker centred on the port in the theme colours, and no chip without a name', () => {
     const look = portLook({ at, side: 'right', label: '  ' }, kit, colors)
     expect(look.label).toBeUndefined()
-    expect(look.marker.x + look.marker.size / 2).toBe(at.x)
+    expect(look.marker.x + look.marker.width / 2).toBe(at.x)
     expect(look.marker.fill).toBe(colors.port.fill)
     expect(look.marker.stroke).toBe(colors.port.stroke)
+  })
+
+  it('widens the marker across a line wider than it, and keeps its depth', () => {
+    const { size } = kit.tokens.port
+    const thin = portLook({ at, side: 'top', line: 2 }, kit, colors).marker
+    expect([thin.width, thin.height]).toEqual([size, size])
+    const top = portLook({ at, side: 'top', line: 19 }, kit, colors).marker
+    expect(top.width).toBe(19 + size / 2)
+    expect(top.height).toBe(size)
+    expect(top.x + top.width / 2).toBe(at.x)
+    const left = portLook({ at, side: 'left', line: 19 }, kit, colors).marker
+    expect([left.width, left.height]).toEqual([size, 19 + size / 2])
+  })
+})
+
+describe('portLines', () => {
+  it('finds the widest line ending where a port stands', () => {
+    const a = { x: 0, y: 0 }
+    const b = { x: 0, y: 50 }
+    const lineAt = portLines([
+      { points: [a, { x: 0, y: 25 }, b], stroke: 4 },
+      { points: [{ x: 9, y: 9 }, a], stroke: 19 },
+    ])
+    expect(lineAt(a)).toBe(19)
+    expect(lineAt(b)).toBe(4)
+    expect(lineAt({ x: 0, y: 25 })).toBeUndefined()
   })
 })
 

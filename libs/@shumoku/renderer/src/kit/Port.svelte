@@ -10,6 +10,7 @@
     label,
     name,
     row,
+    line,
     at,
     side,
     colors,
@@ -23,13 +24,15 @@
     name?: string
     /** The row of chips the label stands in: 1 is the outer row of a top or bottom edge. */
     row?: 0 | 1
+    /** The width of the widest line ending here; the marker widens across it. */
+    line?: number
     at: Point
     side: Side
     colors: KitColors
     kit: Kit
   } = $props()
 
-  const look = $derived(portLook({ at, side, label, row }, kit, colors))
+  const look = $derived(portLook({ at, side, label, row, line }, kit, colors))
 </script>
 
 <g class="port" data-port={id} data-port-device={nodeId}>
@@ -38,8 +41,8 @@
     class="port-box"
     x={look.marker.x}
     y={look.marker.y}
-    width={look.marker.size}
-    height={look.marker.size}
+    width={look.marker.width}
+    height={look.marker.height}
     rx={look.marker.rx}
     fill={look.marker.fill}
     stroke={look.marker.stroke}

@@ -8,7 +8,7 @@
   import NodeCard from './NodeCard.svelte'
   import Port from './Port.svelte'
   import PortCaption from './PortCaption.svelte'
-  import { drawnPortKey } from './port-look.js'
+  import { drawnPortKey, portLines } from './port-look.js'
   import type { Scene } from './scene.js'
   import { kitStyles } from './styles.js'
   import type { Base } from './tokens.js'
@@ -60,6 +60,7 @@
       colors.lineTone,
     ),
   )
+  const lineAt = $derived(portLines(scene.wires))
   const bounds = $derived(scene.bounds)
   const styleTag = $derived(`<style>${kitStyles(tokens, colors)}${styles}</style>`)
   const margin = $derived(tokens.margin)
@@ -120,7 +121,7 @@
       {@render nodeOverlay?.(item)}
     {/each}
     {#each scene.ports ?? [] as port (drawnPortKey(port))}
-      <Port {...port} {colors} {kit} />
+      <Port {...port} line={lineAt(port.at)} {colors} {kit} />
       {@render portOverlay?.(port)}
     {/each}
     {#each scene.captions ?? [] as caption (`${caption.nodeId}|${caption.side}`)}

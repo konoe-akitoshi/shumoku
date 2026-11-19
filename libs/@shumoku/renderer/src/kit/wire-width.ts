@@ -3,35 +3,36 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * How wide a link's line is drawn. Speeds come in decades (10M, 100M, 1G ...) and the reader's
- * question is which generation a line is, so each decade adds one step. A step is two strokes and
- * a half: a network drawing is mostly read shrunk to fit, where a step of one stroke (1G at 3, 10G
- * at 4), and then of a stroke and a half (1G at 4.5, 10G at 6), still drew lines that sank among
- * the frames and were too alike to tell apart. Three strokes (1G at 9) began to outgrow the port
- * a line ends at. The origin is the slowest speed any standard names.
+ * How wide a link's line is drawn. Speeds come in decades (100M, 1G, 10G, 100G ...) and the
+ * reader's question is which generation a line is, so each decade adds the same width. 1G, the
+ * most common speed, is four strokes; a decade adds seven strokes and a half, so a 100G line is
+ * about five 1G lines wide and reads as a trunk at a glance. Two strokes and a half per decade
+ * (1G at 7.5, 100G at 12.5) drew the fastest lines barely thicker than the commonest. A line is
+ * never under two strokes, so 100M and slower are drawn alike, thin but still a line.
  */
 
-import { type Link, linkSpeedBps, STANDARD_SPECS } from '@shumoku/core'
+import { type Link, linkSpeedBps } from '@shumoku/core'
 import type { Kit } from './measure.js'
 
-/** The slowest speed any standard names; a line at it is one step wide. */
-const CATALOG_MIN = Math.min(...Object.values(STANDARD_SPECS).map((s) => s.speedBps))
+/** The speed a line is drawn at its origin width: 1G. */
+const ORIGIN_BPS = 1e9
 
-/** One step, in strokes: what a decade of speed adds to a line's width. */
-const STEP = 2.5
+/** The width at 1G, in strokes. */
+const AT_ORIGIN = 4
 
-/**
- * The width a speed is drawn at. It is never under a stroke, the least a width can differ by, so
- * a speed under the slowest standard's is still drawn as a line.
- */
+/** What a decade of speed adds to a line's width, in strokes. */
+const PER_DECADE = 7.5
+
+/** The least a line is drawn at, in strokes. */
+const FLOOR = 2
+
+/** The width a speed is drawn at. */
 function speedWidth(speed: number, kit: Kit): number {
-  return Math.max(
-    kit.tokens.stroke,
-    STEP * kit.tokens.stroke * (1 + Math.log10(speed / CATALOG_MIN)),
-  )
+  const strokes = AT_ORIGIN + PER_DECADE * Math.log10(speed / ORIGIN_BPS)
+  return Math.max(FLOOR, strokes) * kit.tokens.stroke
 }
 
-/** The median of the widths the links know: what a link that names no speed is drawn at (a bold line, a step wide per stroke, when no link names one). */
+/** The median of the widths the links know: what a link that names no speed is drawn at (a 1G line when no link names one). */
 export function medianWireWidth(links: readonly Link[], kit: Kit): number {
   const known = links
     .flatMap((l) => {
@@ -39,7 +40,7 @@ export function medianWireWidth(links: readonly Link[], kit: Kit): number {
       return speed === undefined ? [] : [speedWidth(speed, kit)]
     })
     .sort((a, b) => a - b)
-  if (known.length === 0) return STEP * kit.tokens.line.bold
+  if (known.length === 0) return AT_ORIGIN * kit.tokens.stroke
   const m = known.length >> 1
   return known.length % 2 ? (known[m] ?? 0) : ((known[m - 1] ?? 0) + (known[m] ?? 0)) / 2
 }
