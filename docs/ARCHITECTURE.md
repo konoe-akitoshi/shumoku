@@ -371,7 +371,7 @@ flowchart LR
 import { attachCamera } from '@shumoku/renderer'
 
 const camera = attachCamera(svgEl, {
-  wheelBehavior: 'auto',            // 'zoom' | 'pan' fix what a plain wheel does
+  wheelBehavior: 'pan',             // 'pan' | 'zoom' | 'cooperative' (plain wheel)
   leftDrag: 'none',                 // 'pan' lets a plain left drag pan (a viewer)
 })
 camera.zoomBy(1.5)

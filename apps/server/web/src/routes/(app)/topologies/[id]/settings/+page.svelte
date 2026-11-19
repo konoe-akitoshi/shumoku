@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { WheelChoice } from '@shumoku/renderer'
   /**
    * Settings — display preferences + danger zone for a topology.
    *
@@ -159,7 +160,7 @@
         <select
           class="px-2 py-1 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text"
           value={preferences.wheelBehavior}
-          onchange={(e) => (preferences.wheelBehavior = e.currentTarget.value as 'pan' | 'zoom')}
+          onchange={(e) => (preferences.wheelBehavior = e.currentTarget.value as WheelChoice)}
         >
           <option value="pan">Scroll</option>
           <option value="zoom">Zoom</option>

@@ -71,6 +71,7 @@
     /**
      * Camera (pan/zoom) options, forwarded to `attachCamera`. Defaults
      * to `{}`: a plain left drag is left to the host (`leftDrag: 'none'`).
+     * What the wheel does comes from `wheel`, not from here.
      * Pass `false` to disable camera entirely (e.g. static preview snapshots).
      */
     camera?: CameraOptions | false

@@ -42,9 +42,9 @@
   // primitives.
   let cameraHandle = $state<CameraHandle | null>(null)
 
-  // Editor camera: a mouse wheel zooms and a trackpad pans (told apart per burst); pinch and
-  // Ctrl/⌘ + wheel zoom; Alt + wheel does the other thing. Space + drag, middle drag and Alt + drag
-  // pan; in view mode a plain left drag pans too (edit mode keeps it for marquee and element drag).
+  // Editor camera: a plain wheel does `viewPrefs.wheelBehavior` (scroll by default); pinch and
+  // Ctrl/⌘ + wheel zoom; Alt + wheel swaps them. Space + drag, middle drag and Alt + drag pan; in
+  // view mode a plain left drag pans too (edit mode keeps it for marquee and element drag).
   let camera = $state.raw<Camera | null>(null)
   const leftDrag = () => (editorState.mode === 'view' ? 'pan' : 'none')
   $effect(() => {

@@ -14,16 +14,9 @@ Server の `TopologyViewer`。この文書は開発メモで、サイトには�
 SpaceMouse は 2 つ目の PR で、`camera.addMotion`（連続入力）と `spacemouse.ts`（report の解析・応答曲線・WebHID）、
 Editor の「Connect SpaceMouse」として入れた（ボタンは Fit と Shift だけ。軸の向きは実機で確かめる）。
 
-見直し（2026-11-19）: §4 の分類は自前の証拠（100 / 120 / 100⁄3 の notch 値と dpr 倍、同じ値の繰り返し、斜めの値、
-学習する prior）をやめ、MapLibre の `scroll_zoom.ts` と同じ規則に替えた（OpenLayers も同じ考え方）。
-4.000244140625 の倍数は wheel、4 px 未満は trackpad、それ以外は 400 ms の間の後の最初の event を 40 ms 待たせ、
-単独なら wheel、続けば `|dt · d| < 200` で trackpad。種類は次の間まで保つ。どの規則も複数の OSS で使われているか、
-MapLibre で長く使われているもので、notch 値の一致で判定する OSS は見つからなかった。
+見直し（2026-11-19）: §4 の自前の分類は MapLibre の規則に替えたが、それも誤判定した（見直し 2）。
 drag は MapLibre / use-gesture / d3-drag に合わせ、release が失われた drag を blur・`lostpointercapture`・
 ボタンの上がった move で終え、pan 後の click の抑止は次の task で解く。
-「ホイールの動作」（Auto / Zoom / Scroll）は Editor の Settings と Server の topology Settings → Display に置いた
-（tldraw・Excalidraw も同じ設定を持つ）。SpaceMouse のボタンは機種ごとの表（Pro 系と 2 ボタン機）で読む。
-§4 の本文は当時の設計で、今の実装とは違う。
 
 見直し 2（2026-11-19）: MapLibre の規則でも、Linux（X11）の Chrome の 2 本指ドラッグが時々ズームになった。
 MapLibre は判定を zoom の速さにしか使わないので外れても困らないが、こちらは外れると操作そのものが入れ替わる。
@@ -108,6 +101,8 @@ dashboard の widget は `cooperative`（Grafana の Node Graph・Google Maps �
 pan の drag が 4 px を超えたら、その直後の `click` を 1 回だけ捨てる（選択が消えないように）。
 
 ### 3.2 wheel（`wheelBehavior` で決まる。Auto は §4 の分類に従う）
+
+> 置き換え済み: 分類（Auto）はやめた。今の動きは冒頭の「見直し 2」を参照。
 
 | 入力 | `zoom`（Mouse） | `pan`（Trackpad） | `auto` |
 |---|---|---|---|
@@ -218,7 +213,7 @@ Editor では下の「命令」は action registry（`apps/editor/src/lib/action
 
 ---
 
-## 4. wheel の正規化と分類
+## 4. wheel の正規化と分類（当時の設計。分類は廃止）
 
 ### 4.1 正規化（純関数 `normalizeWheel(e) → WheelSample`）
 
@@ -255,6 +250,8 @@ else                                 → zoom(wheel)
 ```
 
 ### 4.3 分類（`classify`、Auto の時だけ）
+
+> 置き換え済み: 分類（Auto）はやめた。今の動きは冒頭の「見直し 2」を参照。
 
 状態: `{ prior: 'wheel' | 'trackpad', burstKind, lastT, lastAbs, repeat }`。`prior` の初期値は全 platform で `'trackpad'`（迷ったら pan）。
 
@@ -293,6 +290,8 @@ else                                 → zoom(wheel)
 `dir` は `invertZoom` で反転。`reduced motion`（`prefers-reduced-motion: reduce`）では補間と視点の animation を 0 ms にする。
 
 ### 4.5 設定と既定
+
+> 置き換え済み: 分類（Auto）はやめた。今の動きは冒頭の「見直し 2」を参照。
 
 ```ts
 interface CameraSettings {

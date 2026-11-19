@@ -8,6 +8,7 @@
  * applies the same rules before the first paint, so the page does not flash the other theme.
  */
 
+import type { WheelChoice } from '@shumoku/renderer'
 import { browser } from '$app/environment'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
@@ -35,9 +36,6 @@ const DEFAULTS: Stored = {
   wheelBehavior: 'pan',
 }
 
-export type WheelChoice = 'pan' | 'zoom'
-
-/** A stored `auto` (from before) reads as the default. */
 function isWheelChoice(value: unknown): value is WheelChoice {
   return value === 'zoom' || value === 'pan'
 }

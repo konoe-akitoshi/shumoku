@@ -15,6 +15,9 @@
  * Units follow normalize-wheel: a line is 40 px, a page 800 px.
  */
 
+/** The choice a person makes for their own wheel (a host picks `cooperative` for embedded views). */
+export type WheelChoice = Exclude<WheelBehavior, 'cooperative'>
+
 /**
  * What a plain wheel does: `pan` scrolls the view (the default), `zoom` zooms it, `cooperative`
  * leaves it to the page (a diagram inside a page that scrolls, as Google Maps embedded: only Ctrl /
@@ -90,5 +93,5 @@ export function wheelIntent(
   if (behavior === 'cooperative') return { type: 'page' }
   const zooms = (behavior === 'zoom') !== s.alt
   if (!zooms || s.dy === 0) return { type: 'pan', dx: s.dx, dy: s.dy }
-  return { type: 'zoom', dln: -clamp(s.dy, 300) * rates.wheel, smooth: true }
+  return zoomOf(s.dy, rates)
 }

@@ -1,12 +1,13 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { WheelChoice } from '@shumoku/renderer'
+
 /**
  * How the diagram is moved, a preference of this browser rather than of a project: what a plain
  * wheel does, `pan` (scroll the view, the default) or `zoom`. Ctrl/⌘ + wheel and pinch zoom
- * either way. (A stored `auto`, from before, reads as `pan`.)
+ * either way.
  */
-export type WheelChoice = 'pan' | 'zoom'
 
 const KEY = 'shumoku.wheelBehavior'
 

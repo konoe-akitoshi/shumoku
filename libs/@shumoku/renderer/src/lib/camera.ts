@@ -26,6 +26,7 @@ import {
   centreOn,
   type Frame,
   fitView,
+  frameScale,
   fromTransform,
   isUsable,
   keepInView,
@@ -35,7 +36,7 @@ import {
 } from './camera-view.js'
 import { normalizeWheel, type WheelBehavior, type WheelRates, wheelIntent } from './camera-wheel.js'
 
-export type { WheelBehavior } from './camera-wheel.js'
+export type { WheelBehavior, WheelChoice } from './camera-wheel.js'
 
 export interface CameraOptions {
   /**
@@ -115,8 +116,8 @@ const RATES: WheelRates = { wheel: Math.log(1.0018), pinch: Math.log(1.01) }
  */
 const ADAPTIVE_OVERZOOM = 1.5
 
-/** The `PointerEvent.buttons` bit of a `button` (left 1, right 2, middle 4). */
-const buttonMask = (button: number) => (button === 1 ? 4 : button === 2 ? 2 : 1 << button)
+/** The `PointerEvent.buttons` bit of the button holding a drag: the middle's is 4, the left's 1. */
+const buttonMask = (button: number) => (button === 1 ? 4 : 1)
 
 /** A drag shorter than this is a click. */
 const DRAG_THRESHOLD = 4
@@ -210,7 +211,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
 
   /** The zoom range in `z`. */
   const limits = (): [number, number] => {
-    const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
+    const { s } = frameScale(frame)
     const hi = deriveMaxScale(frame.vbW, frame.vbH, frame.cw, frame.ch, MAX_SCALE_FLOOR)
     return [MIN_SCALE * s, hi * s]
   }
@@ -423,16 +424,18 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     svg.classList.toggle('camera-panning', drag?.active === true)
   }
 
+  const newDrag = (e: PointerEvent, active: boolean) => ({
+    id: e.pointerId,
+    mask: buttonMask(e.button),
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    active,
+  })
+
   const startPan = (e: PointerEvent) => {
-    drag = {
-      id: e.pointerId,
-      mask: buttonMask(e.button),
-      startX: e.clientX,
-      startY: e.clientY,
-      lastX: e.clientX,
-      lastY: e.clientY,
-      active: true,
-    }
+    drag = newDrag(e, true)
     capture(e.pointerId)
     ease = null
     updateCursor()
@@ -451,15 +454,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     if (e.button === 0 && leftDrag === 'pan' && e.pointerType !== 'touch') {
       // Maybe a click: becomes a pan only past the threshold, and captures the pointer then (a
       // capture now would retarget the click away from the node under it).
-      drag = {
-        id: e.pointerId,
-        mask: buttonMask(e.button),
-        startX: e.clientX,
-        startY: e.clientY,
-        lastX: e.clientX,
-        lastY: e.clientY,
-        active: false,
-      }
+      drag = newDrag(e, false)
     }
   }
 
@@ -644,7 +639,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       if (!node || !isUsable(frame)) return false
       const bbox = node.getBBox()
       if (!(bbox.width > 0 && bbox.height > 0)) return false
-      const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
+      const { s } = frameScale(frame)
       const [lo, hi] = limits()
       const k = Math.sqrt((frame.vbW * frame.vbH * areaRatio) / (bbox.width * bbox.height))
       jump(centreOn(bbox, Math.min(hi, Math.max(lo, k * s)), frame))

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { WheelChoice } from '@shumoku/renderer'
   import { DownloadSimple, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { Button } from '$lib/components/ui/button'
@@ -6,7 +7,7 @@
   import { projectsDb } from '$lib/persistence/projects-store'
   import { cache } from '$lib/state/cache.svelte'
   import { sessionStore } from '$lib/state/session.svelte'
-  import { setWheelBehavior, viewPrefs, type WheelChoice } from '$lib/state/view-prefs.svelte'
+  import { setWheelBehavior, viewPrefs } from '$lib/state/view-prefs.svelte'
 
   async function handleExportProject() {
     const blob = await diagramState.exportProjectZip(sessionStore.projectName)
