@@ -11,9 +11,9 @@
  * stops when nothing moves. Wheel events are read by `camera-wheel.ts`.
  *
  * Inputs:
- * - Wheel: a mouse wheel zooms at the cursor (eased), a trackpad pans; told apart per burst, and
- *   `wheelBehavior` overrides the guess. Ctrl/⌘ + wheel and pinch always zoom; Alt + wheel does the
- *   other thing; Shift + wheel scrolls sideways.
+ * - Wheel: what a plain wheel does is `wheelBehavior` (scroll the view by default; no device is
+ *   guessed, see `camera-wheel.ts`). Ctrl/⌘ + wheel and pinch always zoom at the cursor; Alt +
+ *   wheel does the other of scroll and zoom; Shift + wheel scrolls sideways.
  * - Safari's pinch (`gesture*` events).
  * - Drag: middle button, Alt + left, Space + left, and plain left when `leftDrag: 'pan'`.
  *
@@ -26,6 +26,7 @@ import {
   centreOn,
   type Frame,
   fitView,
+  frameScale,
   fromTransform,
   isUsable,
   keepInView,
@@ -33,40 +34,22 @@ import {
   type View,
   zoomAround,
 } from './camera-view.js'
-import {
-  classify,
-  initialClassifier,
-  normalizeWheel,
-  type WheelBehavior,
-  type WheelRates,
-  wheelIntent,
-} from './camera-wheel.js'
+import { normalizeWheel, type WheelBehavior, type WheelRates, wheelIntent } from './camera-wheel.js'
 
-export type { WheelBehavior } from './camera-wheel.js'
-
-export type PanFilter = (event: PointerEvent | MouseEvent) => boolean
+export type { WheelBehavior, WheelChoice } from './camera-wheel.js'
 
 export interface CameraOptions {
   /**
-   * Zoom bounds `[min, max]`, relative to the fitted drawing (1 = fit). When omitted, `min` is
-   * 0.2 and `max` is adaptive: derived from the content/viewport ratio (floored at 10), so a graph
-   * far larger than the screen can still be zoomed in until nodes are readable.
-   */
-  scaleExtent?: [number, number]
-  /**
-   * Pointer-downs that start a pan. Default: the middle button, or Alt + left. Space + left always
-   * pans, and plain left does too with `leftDrag: 'pan'`.
-   */
-  panFilter?: PanFilter
-  /** Zoom per px of a wheel notch, as a factor. Default 1.0018: a 100 px notch zooms ×1.2. */
-  wheelZoomSensitivity?: number
-  /** Zoom per px of a trackpad pinch, as a factor. Default 1.01. */
-  pinchZoomSensitivity?: number
-  /**
-   * What a plain wheel does: `auto` tells a mouse wheel (zoom) from a trackpad (pan) per burst;
-   * `zoom` and `pan` fix it, for devices the guess gets wrong. Default `auto`.
+   * What a plain wheel does: `pan` scrolls the view (default), `zoom` zooms it, `cooperative`
+   * leaves it to the page around (a diagram embedded in a page that scrolls); Ctrl/⌘ + wheel and
+   * pinch zoom in all three.
    */
   wheelBehavior?: WheelBehavior
+  /**
+   * Called when a plain wheel over the diagram was left to the page (`cooperative`), so the host
+   * can say how to zoom ("Ctrl + scroll to zoom"), as Google Maps does.
+   */
+  onPageWheel?: () => void
   /**
    * What a plain left drag does: `pan` (a viewer), or `none` to leave it to the host (an editor's
    * marquee and element drag). Default `none`. A drag under 4 px stays a click.
@@ -79,10 +62,6 @@ export interface Camera {
   getTransform(): { x: number; y: number; k: number }
   /** Scale by a factor about the centre, eased. */
   zoomBy(factor: number): void
-  /** Set the absolute scale (relative to fit), optionally about a point in the viewBox's units. */
-  zoomTo(scale: number, point?: [number, number]): void
-  /** Set the absolute translation (viewBox units). */
-  panTo(x: number, y: number): void
   /** Set translation and scale together, as `getTransform` read them. */
   setTransform(t: { x: number; y: number; k: number }): void
   /**
@@ -94,20 +73,51 @@ export interface Camera {
   setWheelBehavior(behavior: WheelBehavior): void
   /** Change what a plain left drag does (e.g. as a host switches between view and edit). */
   setLeftDrag(leftDrag: 'pan' | 'none'): void
+  /**
+   * Add a continuous input (a 3D mouse, held keys): `sample` is read once a frame while it moves
+   * the view. Call `wake()` when its values change (the camera sleeps when nothing moves).
+   */
+  addMotion(sample: () => Motion | null): MotionHandle
   /** Fit the whole drawing, and keep it fitted as the drawing or the container change. */
   reset(): void
   /** Detach all listeners. Safe to call multiple times. */
   detach(): void
 }
 
-const DEFAULT_PAN_FILTER: PanFilter = (e) =>
-  ('button' in e && e.button === 1) || ('altKey' in e && e.altKey === true)
+/**
+ * A continuous input's velocity: CSS px per second (positive moves the picture right / down)
+ * and ln of the zoom per second (positive zooms in). Zoom is about the pointer when it is over
+ * the diagram, else the centre, and that point is held while the zoom continues.
+ */
+export interface Motion {
+  vx: number
+  vy: number
+  vz: number
+}
+
+export interface MotionHandle {
+  /** The input's values changed: run the next frame. */
+  wake(): void
+  remove(): void
+}
+
+/** The pointer-downs that always pan: the middle button, and Alt + left. */
+const startsPan = (e: PointerEvent) => e.button === 1 || (e.button === 0 && e.altKey)
+
+/** Zoom bounds relative to the fit: out to 0.2, in to the adaptive max (at least 10). */
+const MIN_SCALE = 0.2
+const MAX_SCALE_FLOOR = 10
+/** ln of the zoom per px: a 100 px wheel notch zooms ×1.2; a pinch is quicker. */
+const RATES: WheelRates = { wheel: Math.log(1.0018), pinch: Math.log(1.01) }
 
 /**
  * How far past 1:1 (natural pixel size) the adaptive max zoom allows. 1.5 lets
  * you push a node to ~1.5× its natural size before hitting the cap.
  */
 const ADAPTIVE_OVERZOOM = 1.5
+
+/** The `PointerEvent.buttons` bit of the button holding a drag: the middle's is 4, the left's 1. */
+const buttonMask = (button: number) => (button === 1 ? 4 : 1)
 
 /** A drag shorter than this is a click. */
 const DRAG_THRESHOLD = 4
@@ -175,14 +185,8 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     )
   }
   const viewport: SVGGElement = viewportEl
-  const panFilter = options.panFilter ?? DEFAULT_PAN_FILTER
   let leftDrag = options.leftDrag ?? 'none'
-  const rates: WheelRates = {
-    wheel: Math.log(options.wheelZoomSensitivity ?? 1.0018),
-    pinch: Math.log(options.pinchZoomSensitivity ?? 1.01),
-  }
-  let wheelBehavior: WheelBehavior = options.wheelBehavior ?? 'auto'
-  const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
+  let wheelBehavior: WheelBehavior = options.wheelBehavior ?? 'pan'
 
   // =========================================================================
   // State
@@ -207,11 +211,9 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
 
   /** The zoom range in `z`. */
   const limits = (): [number, number] => {
-    const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
-    const lo = options.scaleExtent?.[0] ?? 0.2
-    const hi =
-      options.scaleExtent?.[1] ?? deriveMaxScale(frame.vbW, frame.vbH, frame.cw, frame.ch, 10)
-    return [lo * s, hi * s]
+    const { s } = frameScale(frame)
+    const hi = deriveMaxScale(frame.vbW, frame.vbH, frame.cw, frame.ch, MAX_SCALE_FLOOR)
+    return [MIN_SCALE * s, hi * s]
   }
 
   // The container's place on the page, read at the start of a gesture rather than per event:
@@ -234,6 +236,13 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   let ease: { target: number; ax: number; ay: number } | null = null
   let raf: number | null = null
   let lastTick = 0
+  const motions = new Set<() => Motion | null>()
+  /** Where a continuous zoom is anchored, held while it lasts (a still cursor must not drift). */
+  let motionAnchor: [number, number] | null = null
+  /** The pointer's last place over the svg (client px), for a continuous zoom's anchor. */
+  let lastPointer: [number, number] | null = null
+  /** Whether the pointer is over the svg. */
+  let pointerOver = false
 
   const write = () => {
     if (!isUsable(frame)) return
@@ -260,6 +269,25 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     panY = 0
     for (const z of zooms) v = zoomAround(v, z.factor, z.ax, z.ay, lo, hi)
     zooms = []
+    let driven = false
+    let zooming = false
+    for (const sample of motions) {
+      const m = sample()
+      if (!m || (m.vx === 0 && m.vy === 0 && m.vz === 0)) continue
+      driven = true
+      const s = dt / 1000
+      v = { x: v.x + m.vx * s, y: v.y + m.vy * s, z: v.z }
+      if (m.vz !== 0) {
+        zooming = true
+        motionAnchor ??=
+          pointerOver && lastPointer
+            ? local(lastPointer[0], lastPointer[1])
+            : [frame.cw / 2, frame.ch / 2]
+        v = zoomAround(v, Math.exp(m.vz * s), motionAnchor[0], motionAnchor[1], lo, hi)
+      }
+    }
+    if (!zooming) motionAnchor = null
+    if (driven) fitted = false
     if (ease) {
       const target = Math.min(Math.log(hi), Math.max(Math.log(lo), ease.target))
       const current = Math.log(v.z)
@@ -270,7 +298,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     }
     view = keepInView(v, frame)
     write()
-    if (ease) {
+    if (ease || driven) {
       gesture()
       request()
     } else {
@@ -315,17 +343,19 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   // Wheel
   // =========================================================================
 
-  let classifier = initialClassifier()
   let pinching = false
 
   const onWheel = (e: WheelEvent) => {
+    const sample = normalizeWheel(e)
+    const intent = wheelIntent(sample, wheelBehavior, RATES)
+    if (intent.type === 'page') {
+      // Left to the page: no preventDefault, so it scrolls as if the diagram were not there.
+      options.onPageWheel?.()
+      return
+    }
     e.preventDefault()
     // Safari 17+ may send a pinch both as gesture events and as ctrl-wheel; take one.
     if (pinching) return
-    const sample = normalizeWheel(e, window.devicePixelRatio)
-    const { kind, state } = classify(sample, classifier, isMac)
-    classifier = state
-    const intent = wheelIntent(sample, kind, wheelBehavior, rates)
     if (intent.type === 'pan') {
       panX -= intent.dx
       panY -= intent.dy
@@ -368,6 +398,8 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
 
   let drag: {
     id: number
+    /** The `buttons` bit of the button that holds it. */
+    mask: number
     startX: number
     startY: number
     lastX: number
@@ -376,7 +408,6 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   } | null = null
   let suppressClick = false
   let spaceHeld = false
-  let pointerOver = false
 
   // A pointer that is already gone (released, or never real) cannot be captured; the pan then
   // simply follows the events the svg itself receives.
@@ -393,15 +424,18 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     svg.classList.toggle('camera-panning', drag?.active === true)
   }
 
+  const newDrag = (e: PointerEvent, active: boolean) => ({
+    id: e.pointerId,
+    mask: buttonMask(e.button),
+    startX: e.clientX,
+    startY: e.clientY,
+    lastX: e.clientX,
+    lastY: e.clientY,
+    active,
+  })
+
   const startPan = (e: PointerEvent) => {
-    drag = {
-      id: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      lastX: e.clientX,
-      lastY: e.clientY,
-      active: true,
-    }
+    drag = newDrag(e, true)
     capture(e.pointerId)
     ease = null
     updateCursor()
@@ -409,7 +443,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
 
   const onPointerDown = (e: PointerEvent) => {
     if (drag !== null) return
-    const claimed = (e.button === 0 && spaceHeld) || panFilter(e)
+    const claimed = (e.button === 0 && spaceHeld) || startsPan(e)
     if (claimed) {
       // Taken here, in the capture phase, so the host's selection and marquee never start.
       e.stopPropagation()
@@ -420,19 +454,18 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     if (e.button === 0 && leftDrag === 'pan' && e.pointerType !== 'touch') {
       // Maybe a click: becomes a pan only past the threshold, and captures the pointer then (a
       // capture now would retarget the click away from the node under it).
-      drag = {
-        id: e.pointerId,
-        startX: e.clientX,
-        startY: e.clientY,
-        lastX: e.clientX,
-        lastY: e.clientY,
-        active: false,
-      }
+      drag = newDrag(e, false)
     }
   }
 
   const onPointerMove = (e: PointerEvent) => {
+    lastPointer = [e.clientX, e.clientY]
     if (drag === null || e.pointerId !== drag.id) return
+    // The release was lost (another window took it, the capture went): the button is up.
+    if ((e.buttons & drag.mask) === 0) {
+      endDrag()
+      return
+    }
     if (!drag.active) {
       if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < DRAG_THRESHOLD) return
       drag.active = true
@@ -447,12 +480,28 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     moved()
   }
 
+  /** End the drag without a release: nothing more moves, and no click follows to suppress. */
+  const endDrag = () => {
+    drag = null
+    updateCursor()
+  }
+
   const onPointerEnd = (e: PointerEvent) => {
     if (drag === null || e.pointerId !== drag.id) return
     const travelled = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
-    if (drag.active && travelled >= DRAG_THRESHOLD) suppressClick = true
-    drag = null
-    updateCursor()
+    if (drag.active && travelled >= DRAG_THRESHOLD && e.type === 'pointerup') {
+      // The click comes in the same task as the release, if at all; one that never comes (the
+      // release was off the svg) must not swallow a later click. As d3-drag does.
+      suppressClick = true
+      setTimeout(() => {
+        suppressClick = false
+      }, 0)
+    }
+    endDrag()
+  }
+
+  const onLostCapture = (e: PointerEvent) => {
+    if (drag?.active && e.pointerId === drag.id) endDrag()
   }
 
   // The click the browser makes after a pan would change the selection.
@@ -497,7 +546,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   const onBlur = () => {
     spaceHeld = false
     pinching = false
-    updateCursor()
+    endDrag()
   }
 
   // =========================================================================
@@ -531,6 +580,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   on('pointermove', onPointerMove)
   on('pointerup', onPointerEnd)
   on('pointercancel', onPointerEnd)
+  on('lostpointercapture', onLostCapture)
   on('click', onClick, { capture: true })
   on('mousedown', onMouseDown, { capture: true })
   on('auxclick', onAuxClick, { capture: true })
@@ -580,24 +630,6 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       easeZoom(Math.log(factor), frame.cw / 2, frame.ch / 2)
     },
 
-    zoomTo(scale: number, point?: [number, number]) {
-      if (!isUsable(frame) || !(scale > 0)) return
-      const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
-      const ox = (frame.cw - frame.vbW * s) / 2
-      const oy = (frame.ch - frame.vbH * s) / 2
-      // `point` is in the viewBox's units, as d3-zoom took it.
-      const [px, py] = point ?? [frame.vbX + frame.vbW / 2, frame.vbY + frame.vbH / 2]
-      const ax = (px - frame.vbX) * s + ox
-      const ay = (py - frame.vbY) * s + oy
-      const [lo, hi] = limits()
-      jump(zoomAround(view, (scale * s) / view.z, ax, ay, lo, hi))
-    },
-
-    panTo(x: number, y: number) {
-      const t = toTransform(view, frame)
-      jump(fromTransform({ k: t.k, tx: x, ty: y }, frame))
-    },
-
     setTransform(t: { x: number; y: number; k: number }) {
       jump(fromTransform({ k: t.k, tx: t.x, ty: t.y }, frame))
     },
@@ -607,7 +639,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       if (!node || !isUsable(frame)) return false
       const bbox = node.getBBox()
       if (!(bbox.width > 0 && bbox.height > 0)) return false
-      const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
+      const { s } = frameScale(frame)
       const [lo, hi] = limits()
       const k = Math.sqrt((frame.vbW * frame.vbH * areaRatio) / (bbox.width * bbox.height))
       jump(centreOn(bbox, Math.min(hi, Math.max(lo, k * s)), frame))
@@ -622,6 +654,16 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       leftDrag = next
     },
 
+    addMotion(sample: () => Motion | null): MotionHandle {
+      motions.add(sample)
+      return {
+        wake: request,
+        remove: () => {
+          motions.delete(sample)
+        },
+      }
+    },
+
     reset() {
       jump(fitView(frame))
       fitted = true
@@ -633,6 +675,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       if (settleTimer !== null) clearTimeout(settleTimer)
       settleTimer = null
       listeners.abort()
+      motions.clear()
       viewBoxObserver.disconnect()
       sizeObserver?.disconnect()
       svg.classList.remove(GESTURE_CLASS, 'camera-pan-ready', 'camera-panning')

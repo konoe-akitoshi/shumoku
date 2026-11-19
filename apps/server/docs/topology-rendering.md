@@ -828,8 +828,8 @@ function classify(target: EventTarget): HoveredElement | null {
 
 ### 6.5 Camera(関数 utility、`@shumoku/renderer` 提供)
 
-**用途**: pan / zoom。マウスホイール = カーソルへズーム(補間つき)、トラックパッド 2 本指 =
-パン、ピンチ / Ctrl・⌘+ホイール = ズーム、Alt+ホイール = 推測の逆、Shift+ホイール = 横スクロール。
+**用途**: pan / zoom。ホイールとトラックパッド 2 本指 = パン(既定)、ピンチ / Ctrl・⌘+ホイール =
+カーソルへズーム、Alt+ホイール = パンとズームの逆、Shift+ホイール = 横スクロール。
 Space+左 / Alt+左 / 中ボタンドラッグ = パン。`leftDrag: 'pan'` なら素の左ドラッグもパン
 (4 px 未満は click のまま。トポロジーの全画面表示が使う。dashboard の widget は gridstack の
 移動とぶつかるので使わない)。
@@ -838,11 +838,8 @@ Space+左 / Alt+左 / 中ボタンドラッグ = パン。`leftDrag: 'pan'` な�
 
 ```ts
 const camera = attachCamera(svgElement, {
-  scaleExtent: [0.2, 10],     // 省略時は min 0.2、max は内容/viewport 比から適応
-  panFilter: ...,             // pan を始める pointerdown の条件
-  wheelZoomSensitivity: ...,  // マウスホイール
-  pinchZoomSensitivity: ...,  // トラックパッドのピンチ
-  wheelBehavior: 'auto',      // 'auto' | 'zoom' | 'pan'(推測を止める)
+  wheelBehavior: 'pan',       // 'pan' | 'zoom' | 'cooperative'(素のホイールはページへ)
+  onPageWheel: () => {},      // cooperative で素のホイールをページに渡したとき(ヒントを出す)
   leftDrag: 'none',           // 'pan' で素の左ドラッグもパン
 })
 camera.setWheelBehavior('pan')
@@ -856,16 +853,23 @@ camera.detach()
 **実装**: 自前の小さな core(d3-zoom / wheel-gestures は使わない)。視点は container の
 CSS px で持つ 1 つの `{x, y, z}` で、入力は意図を溜めるだけ、rAF の 1 回が畳んで `g.viewport` に
 書く。CSS px なので pan は指と 1:1(viewBox の大きさに依らない)で、描き直しで viewBox が
-変わっても見ている場所は動かない(Fit したままなら Fit に追従)。wheel は `camera-wheel.ts` が
-burst(400 ms の間)ごとに証拠(notch の値、細かく斜めの値、間隔)からマウスかトラックパッドかを
-推し、迷ったら pan に倒す。設計は `docs/camera-redesign.md`。
+変わっても見ている場所は動かない(Fit したままなら Fit に追従)。wheel は機器を推測しない(ブラウザは
+マウスとトラックパッドを区別できず、X11 の Chrome や古い Windows のタッチパッドではブラウザ自身も知らない)。
+素のホイールは `wheelBehavior` のとおりで、既定は pan(Figma・tldraw・Excalidraw・Visio・draw.io と同じ)。
+Ctrl+ホイールとピンチ(ブラウザは Ctrl+ホイールとして渡す)は常にズーム。Settings → Display の
+「Mouse Wheel」(この browser に保存)で Scroll / Zoom を選ぶ。dashboard の widget は `wheel="cooperative"`
+(Grafana の Node Graph・Google Maps の埋め込みと同じ)で、素のホイールはページのスクロールに回し、
+図の上では「Ctrl + scroll to zoom」と出す。
+設計は `docs/camera-redesign.md`。
 
 **DOM 操作**: svgElement 上の wheel / pointerdown / pointermove
 listener と、`g.viewport` の `transform` 属性。renderer の class 名
 には依存しない(`g.viewport` は renderer が常に出す唯一の zoom 対象)。
 
-`TopologyViewer.svelte` がこの関数を呼んで camera を attach し、
-graph が変わったときに `camera.reset()` して新しい図を全体表示に戻す。
+`TopologyViewer.svelte` がこの関数を呼んで camera を attach する。scene が変わっても
+`reset()` はしない(裏の再読み込みで視点が全体表示に戻らないように)。全体表示のままなら新しい図の
+全体表示に追従し、動かした視点は同じ場所に残る。別のトポロジーは viewer ごと作り直されるので
+全体表示から始まる。
 
 ---
 

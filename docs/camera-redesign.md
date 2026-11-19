@@ -10,7 +10,22 @@ Server の `TopologyViewer`。この文書は開発メモで、サイトには�
 §4 の正規化と分類、§4.4 の量、§5.4 の「見失わない」制約、D1・D2・D3・D7、§6.2 の `display` をやめる、を含む。
 単純さのため module は `camera.ts`（組み立て）、`camera-view.ts`、`camera-wheel.ts`（純関数）の 3 つにまとめ、
 `getTransform` / `setTransform` は今の意味（viewBox の単位、`k = 1` が Fit）のまま残した。
-残り: keyboard の語彙、視点の animation と履歴、設定 UI、書き込み方式（W2 / W3）の計測、touch、SpaceMouse。
+残り: keyboard の語彙、視点の animation と履歴、設定 UI、書き込み方式（W2 / W3）の計測、touch。
+SpaceMouse は 2 つ目の PR で、`camera.addMotion`（連続入力）と `spacemouse.ts`（report の解析・応答曲線・WebHID）、
+Editor の「Connect SpaceMouse」として入れた（ボタンは Fit と Shift だけ。軸の向きは実機で確かめる）。
+
+見直し（2026-11-19）: §4 の自前の分類は MapLibre の規則に替えたが、それも誤判定した（見直し 2）。
+drag は MapLibre / use-gesture / d3-drag に合わせ、release が失われた drag を blur・`lostpointercapture`・
+ボタンの上がった move で終え、pan 後の click の抑止は次の task で解く。
+
+見直し 2（2026-11-19）: MapLibre の規則でも、Linux（X11）の Chrome の 2 本指ドラッグが時々ズームになった。
+MapLibre は判定を zoom の速さにしか使わないので外れても困らないが、こちらは外れると操作そのものが入れ替わる。
+調べた結果（4 方向の調査）、ブラウザでは確実な判定はできず（X11 の Chrome と古い Windows の touchpad では
+ブラウザも知らない。標準化は `WheelEvent.momentum` だけで機器は分からない）、自動判定を出した Miro・Lucid・
+draw.io はどれも誤判定の苦情を抱えている。そこで判定をやめた: 素のホイールは `wheelBehavior`（既定 pan。
+Figma・tldraw・Excalidraw・Visio・draw.io と同じ）、Ctrl/⌘＋ホイールとピンチは常に zoom、設定は Scroll / Zoom。
+dashboard の widget は `cooperative`（Grafana の Node Graph・Google Maps の埋め込みと同じ）で、素のホイールは
+ページへ渡して「Ctrl + scroll to zoom」を出す。
 
 ---
 
@@ -86,6 +101,8 @@ Server の `TopologyViewer`。この文書は開発メモで、サイトには�
 pan の drag が 4 px を超えたら、その直後の `click` を 1 回だけ捨てる（選択が消えないように）。
 
 ### 3.2 wheel（`wheelBehavior` で決まる。Auto は §4 の分類に従う）
+
+> 置き換え済み: 分類（Auto）はやめた。今の動きは冒頭の「見直し 2」を参照。
 
 | 入力 | `zoom`（Mouse） | `pan`（Trackpad） | `auto` |
 |---|---|---|---|
@@ -196,7 +213,7 @@ Editor では下の「命令」は action registry（`apps/editor/src/lib/action
 
 ---
 
-## 4. wheel の正規化と分類
+## 4. wheel の正規化と分類（当時の設計。分類は廃止）
 
 ### 4.1 正規化（純関数 `normalizeWheel(e) → WheelSample`）
 
@@ -233,6 +250,8 @@ else                                 → zoom(wheel)
 ```
 
 ### 4.3 分類（`classify`、Auto の時だけ）
+
+> 置き換え済み: 分類（Auto）はやめた。今の動きは冒頭の「見直し 2」を参照。
 
 状態: `{ prior: 'wheel' | 'trackpad', burstKind, lastT, lastAbs, repeat }`。`prior` の初期値は全 platform で `'trackpad'`（迷ったら pan）。
 
@@ -271,6 +290,8 @@ else                                 → zoom(wheel)
 `dir` は `invertZoom` で反転。`reduced motion`（`prefers-reduced-motion: reduce`）では補間と視点の animation を 0 ms にする。
 
 ### 4.5 設定と既定
+
+> 置き換え済み: 分類（Auto）はやめた。今の動きは冒頭の「見直し 2」を参照。
 
 ```ts
 interface CameraSettings {

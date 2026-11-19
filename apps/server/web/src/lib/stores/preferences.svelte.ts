@@ -1,6 +1,6 @@
 /**
  * What one viewer chose for how the app looks and behaves in their browser: the theme, the
- * sidebar, and which live layers a topology shows. One place reads and writes them, and every
+ * sidebar, which live layers a topology shows, and what a plain wheel does on a diagram. One place reads and writes them, and every
  * tab of the app (a shared page included) follows a change made in any other tab at once.
  *
  * A shared page may also be given a theme by its link (`?theme=light|dark`, for embedding): that
@@ -8,6 +8,7 @@
  * applies the same rules before the first paint, so the page does not flash the other theme.
  */
 
+import type { WheelChoice } from '@shumoku/renderer'
 import { browser } from '$app/environment'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
@@ -22,6 +23,8 @@ interface Stored {
   liveUpdates: boolean
   showTrafficFlow: boolean
   showNodeStatus: boolean
+  /** What a plain wheel does on a diagram: scroll it (`pan`) or zoom it. */
+  wheelBehavior: WheelChoice
 }
 
 const DEFAULTS: Stored = {
@@ -30,6 +33,11 @@ const DEFAULTS: Stored = {
   liveUpdates: true,
   showTrafficFlow: true,
   showNodeStatus: true,
+  wheelBehavior: 'pan',
+}
+
+function isWheelChoice(value: unknown): value is WheelChoice {
+  return value === 'zoom' || value === 'pan'
 }
 
 function isThemeChoice(value: unknown): value is ThemeChoice {
@@ -52,6 +60,9 @@ function read(text: string | null): Stored {
     liveUpdates: flag('liveUpdates'),
     showTrafficFlow: flag('showTrafficFlow'),
     showNodeStatus: flag('showNodeStatus'),
+    wheelBehavior: isWheelChoice(parsed['wheelBehavior'])
+      ? parsed['wheelBehavior']
+      : DEFAULTS.wheelBehavior,
   }
 }
 
@@ -68,6 +79,7 @@ class Preferences {
   liveUpdates = $state(DEFAULTS.liveUpdates)
   showTrafficFlow = $state(DEFAULTS.showTrafficFlow)
   showNodeStatus = $state(DEFAULTS.showNodeStatus)
+  wheelBehavior = $state<WheelChoice>(DEFAULTS.wheelBehavior)
 
   /** The theme a shared page's link gives, over the viewer's choice. */
   linked = $state<Theme | null>(null)
@@ -92,6 +104,7 @@ class Preferences {
     this.liveUpdates = stored.liveUpdates
     this.showTrafficFlow = stored.showTrafficFlow
     this.showNodeStatus = stored.showNodeStatus
+    this.wheelBehavior = stored.wheelBehavior
   }
 
   stored(): Stored {
@@ -101,6 +114,7 @@ class Preferences {
       liveUpdates: this.liveUpdates,
       showTrafficFlow: this.showTrafficFlow,
       showNodeStatus: this.showNodeStatus,
+      wheelBehavior: this.wheelBehavior,
     }
   }
 }

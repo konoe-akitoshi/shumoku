@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { WheelChoice } from '@shumoku/renderer'
   /**
    * Settings — display preferences + danger zone for a topology.
    *
@@ -145,6 +146,25 @@
           checked={hideDisconnected}
           onchange={(e) => updateHideDisconnected(e.currentTarget.checked)}
         >
+      </label>
+
+      <hr class="border-theme-border">
+
+      <label class="flex items-center justify-between gap-4">
+        <div>
+          <p class="text-sm text-theme-text">Mouse Wheel</p>
+          <p class="text-xs text-theme-text-muted">
+            Scroll moves the diagram (as on a trackpad); Ctrl/⌘ + wheel and pinch zoom either way. Dashboard widgets leave the wheel to the page. Saved in this browser.
+          </p>
+        </div>
+        <select
+          class="px-2 py-1 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text"
+          value={preferences.wheelBehavior}
+          onchange={(e) => (preferences.wheelBehavior = e.currentTarget.value as WheelChoice)}
+        >
+          <option value="pan">Scroll</option>
+          <option value="zoom">Zoom</option>
+        </select>
       </label>
 
       <hr class="border-theme-border">

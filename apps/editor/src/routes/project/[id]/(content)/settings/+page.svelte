@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { WheelChoice } from '@shumoku/renderer'
   import { DownloadSimple, Trash } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { Button } from '$lib/components/ui/button'
@@ -6,6 +7,7 @@
   import { projectsDb } from '$lib/persistence/projects-store'
   import { cache } from '$lib/state/cache.svelte'
   import { sessionStore } from '$lib/state/session.svelte'
+  import { setWheelBehavior, viewPrefs } from '$lib/state/view-prefs.svelte'
 
   async function handleExportProject() {
     const blob = await diagramState.exportProjectZip(sessionStore.projectName)
@@ -96,6 +98,33 @@
         <Button variant="outline" size="sm" onclick={startRename}>Rename</Button>
       {/if}
     </div>
+  </section>
+
+  <!-- Navigation (this browser) -->
+  <section class="space-y-3">
+    <h2
+      class="text-sm font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider"
+    >
+      Navigation
+    </h2>
+    <label
+      class="flex items-center justify-between gap-4 p-4 rounded-xl border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900"
+    >
+      <div>
+        <div class="text-sm font-medium">Mouse wheel</div>
+        <div class="text-xs text-muted-foreground">
+          Scroll moves the diagram (as on a trackpad); Ctrl/⌘ + wheel and pinch zoom either way. Alt + wheel does the other. Saved in this browser.
+        </div>
+      </div>
+      <select
+        class="px-2 py-1 text-sm rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800"
+        value={viewPrefs.wheelBehavior}
+        onchange={(e) => setWheelBehavior(e.currentTarget.value as WheelChoice)}
+      >
+        <option value="pan">Scroll</option>
+        <option value="zoom">Zoom</option>
+      </select>
+    </label>
   </section>
 
   <!-- Export -->

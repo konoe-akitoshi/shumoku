@@ -364,6 +364,7 @@
           {scene}
           theme={currentTheme}
           mode="view"
+          wheel="cooperative"
           interaction={{
     contextMenu: false,
     keyboard: false,
