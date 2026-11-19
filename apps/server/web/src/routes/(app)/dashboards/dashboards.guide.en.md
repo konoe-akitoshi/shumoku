@@ -10,7 +10,7 @@ audience: user
 owner: server-web
 journey: createDashboardJourney
 journeyFile: apps/server/web/src/routes/(app)/dashboards/dashboards.journey.ts
-canonicalDigest: 1f153337ea5512b22eb39e0e96809de736fbeedf41e20953fdb7a86ef4a8aa80
+canonicalDigest: af60a80440d18022aceaeee9ed262f605a3dead7d69407d6b4ea7a26863fe30b
 related:
   - /en/reference/server/getDashboards
   - /en/reference/server/postDashboards
@@ -23,7 +23,7 @@ A dashboard arranges topology, device-status, alert, and other widgets in one vi
 1. Sign in as an administrator, open **Dashboards**, and select **New Dashboard**.
 2. Enter **Dashboard Name** and select **Create**.
 3. Add widgets and choose the topology or data source each one references.
-4. Drag or resize widgets into place. The layout is saved automatically.
+4. Drag a widget by its header to move it and by its bottom-right corner to resize it. **Save** keeps the layout; **Cancel** goes back to how it was.
 
 ## Share it
 

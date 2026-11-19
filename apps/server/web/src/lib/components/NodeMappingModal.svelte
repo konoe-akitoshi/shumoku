@@ -29,7 +29,7 @@
   } from '$lib/stores'
   import type { DiscoveredMetric, MetricsMapping } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
-  import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
+  import type { NodeSelectEvent } from './topology/TopologyView.svelte'
 
   interface Props {
     open: boolean
@@ -134,7 +134,7 @@
   // membership+value view). So a node that IS mapped but hasn't received its
   // first poll shows Device "Unknown" / Monitoring "—" until a value lands —
   // the same membership-vs-values conflation the weathermap overlay was
-  // refactored to separate (see InteractiveSvgDiagram's nodeStatusView). If we
+  // refactored to separate (see TopologyView's nodeStatusView). If we
   // want the modal to distinguish "mapped, awaiting first value" from a genuine
   // 'unknown' verdict, compose $nodeMapping here the same way and show a
   // distinct "waiting for data" state instead of "Unknown".

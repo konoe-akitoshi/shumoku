@@ -9,14 +9,15 @@
    * Reads the topology + sources the layout already loaded into the
    * shell context, so there is no second fetch.
    */
-  import type {
-    NodeSelectEvent,
-    SubgraphSelectEvent,
-  } from '$lib/components/InteractiveSvgDiagram.svelte'
-  import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
+
   import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
+  import type {
+    NodeSelectEvent,
+    SubgraphSelectEvent,
+  } from '$lib/components/topology/TopologyView.svelte'
+  import TopologyView from '$lib/components/topology/TopologyView.svelte'
   import { liveConnection, mappingStore } from '$lib/stores'
   import { readOnlyAccess } from '$lib/stores/auth'
   import type { TopologyDataSource } from '$lib/types'
@@ -30,7 +31,7 @@
   let searchPaletteOpen = $state(false)
   let subgraphModalOpen = $state(false)
   let selectedSubgraphData = $state<SubgraphSelectEvent | null>(null)
-  let diagramComponent: InteractiveSvgDiagram | undefined = $state()
+  let diagramComponent: TopologyView | undefined = $state()
 
   const topologyId = $derived(ctx.topologyId)
   const currentMapping = $derived($mappingStore.mapping)
@@ -116,7 +117,7 @@
     </div>
   {:else if ctx.topology}
     <div class="absolute inset-0">
-      <InteractiveSvgDiagram
+      <TopologyView
         bind:this={diagramComponent}
         {topologyId}
         onSearchOpen={() => (searchPaletteOpen = true)}

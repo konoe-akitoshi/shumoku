@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { api } from '$lib/api'
-import { readerFor } from './dashboard-reader'
+import { readerFor } from './reader'
 
 describe('dashboard reader', () => {
   afterEach(() => vi.restoreAllMocks())

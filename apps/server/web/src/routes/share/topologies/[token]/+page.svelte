@@ -1,9 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state'
   import { api, sharedTopologyStreamUrl } from '$lib/api'
-  import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
   import ThemeToggle from '$lib/components/ThemeToggle.svelte'
+  import TopologyView from '$lib/components/topology/TopologyView.svelte'
 
   let name = $state('')
   let loading = $state(true)
@@ -71,7 +71,7 @@
       </div>
     {:else}
       <div class="absolute inset-0">
-        <InteractiveSvgDiagram graphLoader={loadShared} {liveSource} />
+        <TopologyView graphLoader={loadShared} {liveSource} />
       </div>
     {/if}
   </div>

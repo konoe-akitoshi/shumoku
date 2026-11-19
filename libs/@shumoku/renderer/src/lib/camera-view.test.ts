@@ -7,6 +7,8 @@ import {
   centreOn,
   type Frame,
   fitView,
+  flight,
+  frameBox,
   fromTransform,
   isUsable,
   keepInView,
@@ -112,5 +114,51 @@ describe('centreOn', () => {
     const s = screenOf(v, 120, 110)
     expect(s.x).toBeCloseTo(500)
     expect(s.y).toBeCloseTo(250)
+  })
+})
+
+describe('flight', () => {
+  const close = (
+    a: { x: number; y: number; z: number },
+    b: { x: number; y: number; z: number },
+  ) => {
+    expect(a.x).toBeCloseTo(b.x, 6)
+    expect(a.y).toBeCloseTo(b.y, 6)
+    expect(a.z).toBeCloseTo(b.z, 6)
+  }
+
+  it('starts at one view and lands on the other', () => {
+    const from = fitView(frame)
+    const to = centreOn({ x: 2500, y: 800, width: 100, height: 50 }, 2, frame)
+    const path = flight(from, to, frame)
+    close(path.at(0), from)
+    close(path.at(1), to)
+    expect(path.length).toBeGreaterThan(0)
+  })
+
+  it('zooms out on the way between two close-ups far apart', () => {
+    const a = centreOn({ x: 0, y: 0, width: 50, height: 50 }, 2, frame)
+    const b = centreOn({ x: 2900, y: 900, width: 50, height: 50 }, 2, frame)
+    const mid = flight(a, b, frame).at(0.5)
+    expect(mid.z).toBeLessThan(2)
+  })
+
+  it('only zooms when the centre stays', () => {
+    const a = centreOn({ x: 100, y: 100, width: 10, height: 10 }, 1, frame)
+    const b = centreOn({ x: 100, y: 100, width: 10, height: 10 }, 4, frame)
+    const path = flight(a, b, frame)
+    close(path.at(1), b)
+    const mid = path.at(0.5)
+    expect(mid.z).toBeCloseTo(2, 6)
+  })
+})
+
+describe('frameBox', () => {
+  it('shows the box whole with room around it, within the zoom bounds', () => {
+    const box = { x: 1000, y: 400, width: 200, height: 100 }
+    const v = frameBox(box, frame, 0.5, 0.01, 100)
+    // 400 × 200 world units with the padding, in 1000 × 500 px: z = 2.5
+    expect(v.z).toBeCloseTo(2.5, 6)
+    expect(frameBox(box, frame, 0.5, 0.01, 1).z).toBe(1)
   })
 })

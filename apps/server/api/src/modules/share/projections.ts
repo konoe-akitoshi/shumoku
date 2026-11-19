@@ -161,11 +161,19 @@ export function publicTopologyGraph(parsed: ShareParsedTopology) {
 const PUBLIC_WIDGET_CONFIG_KEYS = [
   'topologyId',
   'dataSourceId',
-  'showMetrics',
-  'showLabels',
-  'interactive',
   'metricType',
   'title',
+  // How a widget shows what it reads (the web app's `lib/dashboard/widgets.ts` schemas): without
+  // them a shared dashboard drew its widgets with the defaults, and an alert widget set to keep
+  // its highlights until resolved let them go.
+  'maxItems',
+  'autoRefresh',
+  'showResolved',
+  'staleAfterHours',
+  'showDetail',
+  'followAlerts',
+  'followMinSeverity',
+  'returnAfterIdle',
 ] as const
 
 export function publicDashboardLayout(layoutJson: string): string {

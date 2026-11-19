@@ -1,59 +1,48 @@
 <script lang="ts">
   /**
-   * HighlightOverlay — adds `.node-highlighted` (and optionally
-   * `.node-dimmed` on peers) to matching nodes. Also supports
-   * attribute-based matching ('show all L3 switches').
-   *
-   * Exposes both a reactive prop-driven API (pass `highlightedIds` /
-   * `attributeMatch` in) and an imperative handle (`bind:this`) so
-   * event-driven callers (dashboard widget events) can call
-   * `.applyIds(...)` / `.applyAttribute(...)` / `.clear()` directly.
+   * HighlightOverlay — marks nodes (`.node-highlighted`), each in its own colour, and optionally
+   * dims the rest (`.node-dimmed`). Marked nodes in `fresh` (what is new) beat with a glow
+   * (`.node-new`), also where the steady pulse is off, so a new alert stands out from the ones
+   * already known. Purely prop-driven: what is passed now is what is shown.
    */
-
-  interface AttributeMatch {
-    key: string
-    value: string
-  }
 
   interface Props {
     svgElement: SVGSVGElement | null
-    /** Reactive highlight state. Setting this re-applies. */
-    highlightedIds?: ReadonlySet<string> | string[]
-    /** Reactive attribute match — wins over `highlightedIds` if both set. */
-    attributeMatch?: AttributeMatch
-    /** Dim non-highlighted nodes + links when something is highlighted. */
+    /** Node id → its colour (`undefined`: the default highlight colour). */
+    marks?: ReadonlyMap<string, string | undefined>
+    /** Dim the nodes and links that are not marked, while any node is. */
     dimOthers?: boolean
-    /** Color applied via `--highlight-color` CSS variable. */
-    highlightColor?: string
-    /** Pulse animation on matched nodes. Default: true. */
+    /** Pulse the marked nodes. Default: true. */
     pulseAnimation?: boolean
+    /** Marked nodes that are new: they beat with a glow until they leave this set. */
+    fresh?: ReadonlySet<string>
   }
 
-  let {
-    svgElement,
-    highlightedIds,
-    attributeMatch,
-    dimOthers = false,
-    highlightColor,
-    pulseAnimation = true,
-  }: Props = $props()
+  let { svgElement, marks, dimOthers = false, pulseAnimation = true, fresh }: Props = $props()
 
   function clear(svg: SVGSVGElement) {
-    for (const el of svg.querySelectorAll('.node-highlighted')) {
-      el.classList.remove('node-highlighted')
+    for (const el of svg.querySelectorAll<SVGElement>('.node-highlighted')) {
+      el.classList.remove('node-highlighted', 'node-new')
+      el.style.removeProperty('--highlight-color')
     }
     for (const el of svg.querySelectorAll('.node-dimmed')) {
       el.classList.remove('node-dimmed')
     }
   }
 
-  function applyIds(svg: SVGSVGElement, ids: ReadonlySet<string>): void {
+  $effect(() => {
+    if (!svgElement) return
+    const svg = svgElement
+    svg.style.setProperty('--highlight-pulse', pulseAnimation ? 'node-pulse' : 'none')
     clear(svg)
-    if (ids.size === 0) return
-    for (const node of svg.querySelectorAll('g.node[data-id]')) {
+    if (!marks || marks.size === 0) return
+    for (const node of svg.querySelectorAll<SVGGElement>('g.node[data-id]')) {
       const id = node.getAttribute('data-id')
-      if (id && ids.has(id)) {
+      if (id && marks.has(id)) {
         node.classList.add('node-highlighted')
+        if (fresh?.has(id)) node.classList.add('node-new')
+        const color = marks.get(id)
+        if (color) node.style.setProperty('--highlight-color', color)
       } else if (dimOthers) {
         node.classList.add('node-dimmed')
       }
@@ -63,64 +52,6 @@
         link.classList.add('node-dimmed')
       }
     }
-  }
-
-  function applyAttribute(svg: SVGSVGElement, key: string, value: string): void {
-    clear(svg)
-    let matched = 0
-    for (const node of svg.querySelectorAll('g.node[data-id]')) {
-      if (node.getAttribute(key) === value) {
-        node.classList.add('node-highlighted')
-        matched++
-      } else if (dimOthers) {
-        node.classList.add('node-dimmed')
-      }
-    }
-    if (matched > 0 && dimOthers) {
-      for (const link of svg.querySelectorAll('g.link-group[data-link-id]')) {
-        link.classList.add('node-dimmed')
-      }
-    }
-  }
-
-  // Imperative handle for event-driven consumers
-  export function apply(ids: Iterable<string>): void {
-    if (!svgElement) return
-    applyIds(svgElement, new Set(ids))
-  }
-  export function applyByAttribute(key: string, value: string): void {
-    if (!svgElement) return
-    applyAttribute(svgElement, key, value)
-  }
-  export function clearHighlight(): void {
-    if (svgElement) clear(svgElement)
-  }
-
-  // Reactive prop-driven path
-  $effect(() => {
-    if (!svgElement) return
-    const svg = svgElement
-
-    // `--highlight-color` is picked up by CSS rules on the host
-    // container. Scope it to the SVG so the caller doesn't have to
-    // wire it up themselves.
-    if (highlightColor) {
-      svg.style.setProperty('--highlight-color', highlightColor)
-    } else {
-      svg.style.removeProperty('--highlight-color')
-    }
-    svg.style.setProperty('--highlight-pulse', pulseAnimation ? 'node-pulse' : 'none')
-
-    if (attributeMatch) {
-      applyAttribute(svg, attributeMatch.key, attributeMatch.value)
-      return
-    }
-    if (highlightedIds) {
-      const set = highlightedIds instanceof Set ? highlightedIds : new Set(highlightedIds)
-      applyIds(svg, set)
-      return
-    }
-    clear(svg)
   })
 
   $effect(() => {
@@ -137,8 +68,8 @@
 </script>
 
 <!-- Highlight styling is co-located so any consumer of this overlay
-     gets the visuals automatically. `--highlight-color` and
-     `--highlight-pulse` are set reactively above. -->
+     gets the visuals automatically. `--highlight-color` is set per node and
+     `--highlight-pulse` on the SVG, above. -->
 <svelte:head>
   {@html `<style id="shumoku-highlight-css">
     g.node.node-highlighted,
@@ -160,6 +91,21 @@
       opacity: 0.15;
       transition: opacity 0.2s ease;
     }
+    g.node.node-highlighted.node-new {
+      animation: node-new-beat 1.2s ease-in-out infinite;
+    }
+    g.node.node-highlighted.node-new rect,
+    g.node.node-highlighted.node-new circle,
+    g.node.node-highlighted.node-new path {
+      stroke-width: 5px !important;
+    }
     @keyframes node-pulse { from { opacity: 1; } to { opacity: 0.7; } }
+    @keyframes node-new-beat {
+      0%, 100% { filter: drop-shadow(0 0 2px var(--highlight-color, #f59e0b)); }
+      50% { filter: drop-shadow(0 0 18px var(--highlight-color, #f59e0b)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      g.node.node-highlighted.node-new { animation: none; }
+    }
   </style>`}
 </svelte:head>

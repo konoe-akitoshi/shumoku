@@ -1,331 +1,124 @@
 <script lang="ts">
-  import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
   import {
-    ChartLineIcon,
-    CpuIcon,
-    DatabaseIcon,
     FloppyDiskIcon,
-    HeartIcon,
     PencilSimpleIcon,
     PlusIcon,
     SpinnerIcon,
     SquaresFourIcon,
-    TreeStructureIcon,
     XIcon,
   } from 'phosphor-svelte'
-  import { mount, onMount, tick, unmount, untrack } from 'svelte'
-  import { browser } from '$app/environment'
   import { goto } from '$app/navigation'
   import { api } from '$lib/api'
   import ShareButton from '$lib/components/ShareButton.svelte'
+  import DashboardGrid from '$lib/dashboard/DashboardGrid.svelte'
+  import { DashboardState } from '$lib/dashboard/dashboard.svelte'
+  import { type DashboardLayout, parseLayout } from '$lib/dashboard/layout'
+  import { dashboardNames } from '$lib/dashboard/names.svelte'
+  import { readerFor } from '$lib/dashboard/reader'
+  import { WIDGETS } from '$lib/dashboard/widgets'
   import { readOnlyAccess } from '$lib/stores/auth'
-  import {
-    currentDashboard,
-    currentLayout,
-    dashboardEditMode,
-    dashboardError,
-    dashboardLoading,
-    dashboardStore,
-  } from '$lib/stores/dashboards'
-  import type { DashboardLayout, WidgetPosition } from '$lib/types'
-  import { getAllWidgets, getWidget, initializeWidgets } from '$lib/widgets'
+  import type { Dashboard } from '$lib/types'
 
   let { data } = $props()
-  let id = $derived(data.id)
 
-  // UI State
-  let showWidgetPanel = $state(false)
+  const dashboard = new DashboardState(readerFor({ kind: 'workspace' }))
+
+  let current = $state<Dashboard | null>(null)
+  let layout = $state<DashboardLayout | null>(null)
+  /** The layout as saved, to go back to on Cancel. */
+  let saved: DashboardLayout | null = null
+  let loading = $state(true)
+  let error = $state<string | null>(null)
   let saving = $state(false)
+  let showWidgetPanel = $state(false)
+  let grid = $state<ReturnType<typeof DashboardGrid>>()
 
-  // Grid state
-  let gridContainer: HTMLDivElement | null = $state(null)
-  let grid: GridStack | null = $state(null)
-  let mountedComponents = new Map<string, ReturnType<typeof mount>>()
-  let gridStackReady = false
-
-  // Register available widget types once (idempotent).
-  onMount(() => {
-    initializeWidgets()
-    return () => {
-      cleanupAllWidgets()
-      if (grid) {
-        grid.destroy(true)
-        grid = null
-      }
-      dashboardStore.clearCurrent()
-    }
-  })
-
-  // Re-fetch the dashboard whenever the route id changes. SvelteKit reuses
-  // this component for navigations within /dashboards/[id], so onMount alone
-  // would leave the previous dashboard's grid on screen.
-  $effect(() => {
-    if ($readOnlyAccess && $dashboardEditMode) dashboardStore.setEditMode(false)
-  })
-
-  $effect(() => {
-    const currentId = id
-    if (!currentId) return
-    // Tear down the existing grid so the next layout rebuilds cleanly.
-    // Only `id` should trigger this effect — read/mutate `grid` inside
-    // untrack() so the grid signal is NOT captured as a dependency. Otherwise
-    // initGrid()'s `grid = GridStack.init(...)` re-fires this effect, which
-    // destroys the freshly-created grid (and refetches), ping-ponging with the
-    // init effect forever and leaving `grid` null — so Add Widget's
-    // `if (!grid) return` guard silently drops every widget.
-    untrack(() => {
-      cleanupAllWidgets()
-      if (grid) {
-        grid.destroy(true)
-        grid = null
-      }
-    })
-    dashboardStore.get(currentId)
-  })
-
-  // --- Helper Functions ---
-
-  function cleanupAllWidgets() {
-    for (const [, component] of mountedComponents) {
-      try {
-        unmount(component)
-      } catch {}
-    }
-    mountedComponents.clear()
-  }
-
-  function layoutToGridWidgets(widgets: DashboardLayout['widgets']): GridStackWidget[] {
-    return widgets.map((w) => ({
-      id: w.id,
-      x: w.position.x,
-      y: w.position.y,
-      w: w.position.w,
-      h: w.position.h,
-      minW: getWidget(w.type)?.minSize?.w || 2,
-      minH: getWidget(w.type)?.minSize?.h || 2,
-    }))
-  }
-
-  function setGridEditMode(editMode: boolean) {
-    if (!grid) return
-    grid.setStatic(!editMode)
-    grid.enableMove(editMode)
-    grid.enableResize(editMode)
-  }
-
-  // --- Grid Initialization ---
-
-  async function initGrid() {
-    if (!browser || !gridContainer || !$currentLayout || grid) return
-
+  async function load(id: string) {
+    loading = true
+    error = null
     try {
-      const GridStackModule = await import('gridstack')
-      const { GridStack } = GridStackModule
-      await import('gridstack/dist/gridstack.min.css')
-
-      // Set renderCB once (it's a static property)
-      if (!gridStackReady) {
-        GridStack.renderCB = (el: HTMLElement, widget: GridStackNode) => {
-          const widgetId = widget.id as string
-          if (!widgetId) return
-
-          const widgetData = $currentLayout?.widgets.find((w) => w.id === widgetId)
-          if (!widgetData) return
-
-          const widgetDef = getWidget(widgetData.type)
-          if (!widgetDef) {
-            // Set as text, not interpolated innerHTML, so a crafted type can't inject markup.
-            const placeholder = document.createElement('div')
-            placeholder.className =
-              'h-full flex items-center justify-center bg-theme-bg-elevated rounded-lg border border-theme-border text-theme-text-muted'
-            placeholder.textContent = `Unknown widget: ${widgetData.type}`
-            el.replaceChildren(placeholder)
-            return
-          }
-
-          try {
-            const component = mount(widgetDef.component, {
-              target: el,
-              props: {
-                id: widgetId,
-                config: widgetData.config,
-                editMode: $dashboardEditMode,
-                onRemove: () => removeWidget(widgetId),
-              },
-            })
-            mountedComponents.set(widgetId, component)
-          } catch (e) {
-            console.error(`Failed to mount widget ${widgetId}:`, e)
-            el.innerHTML = `<div class="h-full flex items-center justify-center text-danger">Error loading widget</div>`
-          }
-        }
-        gridStackReady = true
-      }
-
-      // Initialize grid
-      const isEditMode = $dashboardEditMode
-      grid = GridStack.init(
-        {
-          column: $currentLayout.columns || 12,
-          cellHeight: $currentLayout.rowHeight || 100,
-          margin: $currentLayout.margin || 8,
-          float: true,
-          animate: true,
-          staticGrid: !isEditMode,
-          disableResize: !isEditMode,
-          disableDrag: !isEditMode,
-        },
-        gridContainer,
-      )
-      if (!grid) throw new Error('Dashboard grid could not be initialized')
-
-      // Always set up event listeners (they respect static mode)
-      grid.on('change', (_event: Event, items: GridStackNode[]) => {
-        if (!items?.length) return
-        const positions = items
-          .filter((item) => item.id)
-          .map((item) => ({
-            id: item.id as string,
-            position: {
-              x: item.x ?? 0,
-              y: item.y ?? 0,
-              w: item.w ?? 4,
-              h: item.h ?? 3,
-            } as WidgetPosition,
-          }))
-        dashboardStore.updateWidgetPositions(positions)
-      })
-
-      grid.on('removed', (_event: Event, items: GridStackNode[]) => {
-        for (const item of items) {
-          const widgetId = item.id as string
-          const component = mountedComponents.get(widgetId)
-          if (component) {
-            try {
-              unmount(component)
-            } catch {}
-            mountedComponents.delete(widgetId)
-          }
-        }
-      })
-
-      // Load widgets
-      grid.load(layoutToGridWidgets($currentLayout.widgets))
-    } catch (e) {
-      console.error('Failed to initialize GridStack:', e)
+      const fetched = await api.dashboards.get(id)
+      if (id !== data.id) return
+      current = fetched
+      dashboardNames[fetched.id] = fetched.name
+      layout = parseLayout(fetched.layoutJson)
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to load dashboard'
+    } finally {
+      loading = false
     }
   }
 
-  // --- Effects ---
-
-  // Initialize grid when layout loads
+  // SvelteKit reuses this page for another /dashboards/[id]: load that one, out of editing.
   $effect(() => {
-    const layout = $currentLayout
-    if (browser && gridContainer && layout && !grid) {
-      tick().then(() => initGrid())
-    }
+    const id = data.id
+    dashboard.editing = false
+    layout = null
+    void load(id)
   })
 
-  // Toggle edit mode
+  // Someone who may only read never edits.
   $effect(() => {
-    const editMode = $dashboardEditMode
-    if (grid) {
-      setGridEditMode(editMode)
-    }
+    if ($readOnlyAccess) dashboard.editing = false
   })
 
-  // --- Event Handlers ---
+  function startEditing() {
+    if (!layout) return
+    saved = $state.snapshot(layout)
+    dashboard.editing = true
+  }
 
-  async function addWidgetToGrid(type: string) {
-    if (!grid || !$currentLayout) return
+  /**
+   * Bumped to build the grid again. The grid settles one widget at a time, pushing others out of
+   * the way, so putting every widget back at once (a cancel) would have one push another that is
+   * not back yet; a new grid places them all as they were.
+   */
+  let gridVersion = $state(0)
 
-    const widgetDef = getWidget(type)
-
-    // Add to store
-    dashboardStore.addWidget(type)
+  function cancel() {
+    if (saved) {
+      const moved =
+        JSON.stringify(saved.widgets.map((w) => [w.id, w.position])) !==
+        JSON.stringify($state.snapshot(layout)?.widgets.map((w) => [w.id, w.position]))
+      layout = saved
+      if (moved) gridVersion++
+    }
+    saved = null
     showWidgetPanel = false
-
-    await tick()
-
-    // Add new widget directly to grid
-    const newWidget = $currentLayout.widgets[$currentLayout.widgets.length - 1]
-    if (newWidget) {
-      grid.addWidget({
-        id: newWidget.id,
-        x: newWidget.position.x,
-        y: newWidget.position.y,
-        w: newWidget.position.w,
-        h: newWidget.position.h,
-        minW: widgetDef?.minSize?.w || 2,
-        minH: widgetDef?.minSize?.h || 2,
-      })
-    }
+    dashboard.editing = false
   }
 
-  async function handleSave() {
+  async function save() {
+    if (!current || !layout) return
     saving = true
-    const success = await dashboardStore.save()
-    saving = false
-    if (success) {
-      dashboardStore.setEditMode(false)
+    try {
+      current = await api.dashboards.update(current.id, {
+        layoutJson: JSON.stringify($state.snapshot(layout)),
+      })
+      saved = null
+      showWidgetPanel = false
+      dashboard.editing = false
+    } catch (err) {
+      error = err instanceof Error ? err.message : 'Failed to save dashboard'
+    } finally {
+      saving = false
     }
   }
 
-  async function handleCancel() {
-    if (!grid) return
-
-    // Clean up and remove all widgets
-    cleanupAllWidgets()
-    grid.removeAll(false)
-
-    // Restore layout
-    dashboardStore.cancelEdit()
-    await tick()
-
-    // Reload widgets
-    if ($currentLayout) {
-      grid.load(layoutToGridWidgets($currentLayout.widgets))
-    }
+  async function share() {
+    if (!current) return
+    await api.dashboards.share(current.id)
+    current = await api.dashboards.get(current.id)
   }
 
-  function removeWidget(widgetId: string) {
-    if (grid) {
-      const el = gridContainer?.querySelector(`[gs-id="${widgetId}"]`)
-      if (el) grid.removeWidget(el as HTMLElement)
-    }
-    dashboardStore.removeWidget(widgetId)
-  }
-
-  // --- UI Helpers ---
-
-  async function handleShare() {
-    const dashboard = $currentDashboard
-    if (!dashboard || !id) return
-    await api.dashboards.share(dashboard.id)
-    // Refresh to pick up new shareToken
-    dashboardStore.get(id)
-  }
-
-  async function handleUnshare() {
-    const dashboard = $currentDashboard
-    if (!dashboard || !id) return
-    await api.dashboards.unshare(dashboard.id)
-    dashboardStore.get(id)
-  }
-
-  function getWidgetIcon(type: string) {
-    const icons: Record<string, typeof SquaresFourIcon> = {
-      topology: TreeStructureIcon,
-      'metrics-gauge': ChartLineIcon,
-      'health-status': HeartIcon,
-      'datasource-status': DatabaseIcon,
-      'device-status': CpuIcon,
-    }
-    return icons[type] || SquaresFourIcon
+  async function unshare() {
+    if (!current) return
+    await api.dashboards.unshare(current.id)
+    current = await api.dashboards.get(current.id)
   }
 </script>
 
-<svelte:head> <title>{$currentDashboard?.name || 'Dashboard'} - Shumoku</title> </svelte:head>
+<svelte:head> <title>{current?.name || 'Dashboard'} - Shumoku</title> </svelte:head>
 
 <div class="h-full flex flex-col">
   <!-- Header -->
@@ -335,15 +128,15 @@
     <div class="flex items-center gap-3">
       <SquaresFourIcon size={24} class="text-primary" />
       <h1 class="text-lg font-semibold text-theme-text-emphasis">
-        {$currentDashboard?.name || 'Dashboard'}
+        {current?.name || 'Dashboard'}
       </h1>
     </div>
 
-    {#if !$readOnlyAccess}
+    {#if !$readOnlyAccess && layout}
       <div class="flex items-center gap-2">
-        {#if $dashboardEditMode}
-          <!-- Edit Mode Actions -->
+        {#if dashboard.editing}
           <button
+            type="button"
             onclick={() => (showWidgetPanel = !showWidgetPanel)}
             class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
           >
@@ -351,14 +144,16 @@
             <span>Add Widget</span>
           </button>
           <button
-            onclick={handleCancel}
+            type="button"
+            onclick={cancel}
             class="flex items-center gap-2 px-3 py-1.5 text-theme-text-muted hover:text-theme-text transition-colors text-sm"
           >
             <XIcon size={16} />
             <span>Cancel</span>
           </button>
           <button
-            onclick={handleSave}
+            type="button"
+            onclick={save}
             disabled={saving}
             class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors text-sm disabled:opacity-50"
           >
@@ -370,15 +165,15 @@
             <span>Save</span>
           </button>
         {:else}
-          <!-- View Mode Actions -->
           <ShareButton
-            shareToken={$currentDashboard?.shareToken}
+            shareToken={current?.shareToken}
             shareType="dashboards"
-            onShare={handleShare}
-            onUnshare={handleUnshare}
+            onShare={share}
+            onUnshare={unshare}
           />
           <button
-            onclick={() => dashboardStore.setEditMode(true)}
+            type="button"
+            onclick={startEditing}
             class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
           >
             <PencilSimpleIcon size={16} />
@@ -391,25 +186,34 @@
 
   <!-- Main Content -->
   <div class="flex-1 overflow-auto relative">
-    {#if $dashboardLoading && !$currentLayout}
+    {#if loading && !layout}
       <div class="flex items-center justify-center h-full">
         <SpinnerIcon size={32} class="animate-spin text-theme-text-muted" />
       </div>
-    {:else if $dashboardError}
+    {:else if error && !layout}
       <div class="flex flex-col items-center justify-center h-full text-danger gap-2">
-        <span>{$dashboardError}</span>
-        <button onclick={() => goto('/dashboards')} class="text-primary hover:underline text-sm">
+        <span>{error}</span>
+        <button
+          type="button"
+          onclick={() => goto('/dashboards')}
+          class="text-primary hover:underline text-sm"
+        >
           Back to Dashboards
         </button>
       </div>
-    {:else if $currentLayout}
-      <!-- Widget Grid - always render for GridStack -->
-      <div bind:this={gridContainer} class="grid-stack p-4">
-        <!-- GridStack creates items via grid.load() and renderCB -->
+    {:else if layout}
+      {#if error}
+        <div class="mx-4 mt-4 px-3 py-2 rounded border border-danger/30 bg-danger/10 text-sm text-danger">
+          {error}
+        </div>
+      {/if}
+      <div class="p-4 min-h-full">
+        {#key gridVersion}
+          <DashboardGrid bind:this={grid} bind:layout={layout} {dashboard} />
+        {/key}
       </div>
 
-      {#if $currentLayout.widgets.length === 0 && !$dashboardEditMode}
-        <!-- Empty Dashboard Overlay -->
+      {#if layout.widgets.length === 0 && !dashboard.editing}
         <div
           class="absolute inset-0 flex flex-col items-center justify-center text-center p-8 bg-theme-bg-canvas/80"
         >
@@ -417,52 +221,61 @@
           <h2 class="text-xl font-semibold text-theme-text-emphasis mb-2">
             This dashboard is empty
           </h2>
-          <p class="text-theme-text-muted mb-6 max-w-md">
-            Click "Edit" and then "Add Widget" to add widgets to your dashboard.
-          </p>
-          <button
-            onclick={() => dashboardStore.setEditMode(true)}
-            class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
-          >
-            <PencilSimpleIcon size={20} />
-            <span>Start Editing</span>
-          </button>
+          {#if !$readOnlyAccess}
+            <p class="text-theme-text-muted mb-6 max-w-md">
+              Click "Edit" and then "Add Widget" to add widgets to your dashboard.
+            </p>
+            <button
+              type="button"
+              onclick={startEditing}
+              class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
+            >
+              <PencilSimpleIcon size={20} />
+              <span>Start Editing</span>
+            </button>
+          {/if}
         </div>
       {/if}
     {/if}
 
     <!-- Widget Panel (Slide-over) -->
-    {#if showWidgetPanel}
+    {#if showWidgetPanel && dashboard.editing}
       <div
-        class="absolute inset-y-0 right-0 w-72 bg-theme-bg-elevated border-l border-theme-border shadow-xl flex flex-col z-10"
+        class="absolute inset-y-0 right-0 w-72 bg-theme-bg-elevated border-l border-theme-border shadow-xl flex flex-col z-40"
       >
         <div class="flex items-center justify-between px-4 py-3 border-b border-theme-border">
           <h3 class="font-semibold text-theme-text-emphasis">Add Widget</h3>
           <button
+            type="button"
             onclick={() => (showWidgetPanel = false)}
             class="w-6 h-6 flex items-center justify-center rounded hover:bg-theme-bg-canvas text-theme-text-muted hover:text-theme-text transition-colors"
+            aria-label="Close"
           >
             <XIcon size={16} />
           </button>
         </div>
         <div class="flex-1 overflow-auto p-3">
           <div class="space-y-2">
-            {#each getAllWidgets() as widgetDef}
-              {@const IconComponent = getWidgetIcon(widgetDef.type)}
+            {#each WIDGETS as definition (definition.type)}
+              {@const Icon = definition.icon}
               <button
-                onclick={() => addWidgetToGrid(widgetDef.type)}
+                type="button"
+                onclick={() => {
+                  grid?.add(definition)
+                  showWidgetPanel = false
+                }}
                 class="w-full flex items-center gap-3 p-3 rounded-lg bg-theme-bg-canvas hover:bg-theme-bg border border-theme-border hover:border-primary/50 transition-colors text-left"
               >
                 <div
                   class="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary"
                 >
-                  <IconComponent size={20} />
+                  <Icon size={20} />
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="font-medium text-theme-text-emphasis text-sm">
-                    {widgetDef.displayName}
+                    {definition.displayName}
                   </div>
-                  <div class="text-xs text-theme-text-muted truncate">{widgetDef.description}</div>
+                  <div class="text-xs text-theme-text-muted truncate">{definition.description}</div>
                 </div>
               </button>
             {/each}
@@ -472,31 +285,3 @@
     {/if}
   </div>
 </div>
-
-<style>
-  :global(.grid-stack) {
-    background: transparent;
-    min-height: 100%;
-  }
-
-  :global(.grid-stack-item-content) {
-    background: transparent;
-    overflow: hidden;
-  }
-
-  :global(.grid-stack-placeholder > .placeholder-content) {
-    background-color: var(--color-primary);
-    opacity: 0.2;
-    border-radius: 0.5rem;
-  }
-
-  /* Static mode cursor */
-  :global(.grid-stack-static > .grid-stack-item) {
-    cursor: default;
-  }
-
-  /* Edit mode cursor */
-  :global(.grid-stack:not(.grid-stack-static) > .grid-stack-item) {
-    cursor: move;
-  }
-</style>
