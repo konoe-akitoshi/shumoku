@@ -1,14 +1,18 @@
-import { type Alert, hasConfigOptions, hasConnectionInfo } from '@shumoku/core'
+import {
+  type Alert,
+  type AlertQueryOptions,
+  hasConfigOptions,
+  hasConnectionInfo,
+} from '@shumoku/core'
 import { getAllPlugins } from '../plugins/loader.js'
 import { hasNativeApi } from '../plugins/types.js'
 import type { DataSourceService } from '../services/datasource.js'
-import type { DataSourceOperationsService } from './services.js'
+import type { AlertCollectionView, DataSourceOperationsService } from './services.js'
 
 type DataSourceOperationsStore = Pick<
   DataSourceService,
   | 'get'
   | 'getPlugin'
-  | 'getAlerts'
   | 'getFilterOptions'
   | 'getHostItems'
   | 'getHosts'
@@ -22,19 +26,24 @@ type DataSourceOperationsStore = Pick<
   | 'updateHealthStatus'
 >
 
-interface AlertStreamIngestor {
-  ingestAlerts(
-    dataSourceId: string,
-    topologyId: string | null,
-    alerts: Alert[],
-    options: { fullActiveSet: boolean },
-  ): Promise<unknown>
+/** The Server's alert collection (`services/alert-collector.ts`): readers never call a plugin. */
+export interface AlertCollection {
+  read(sourceId: string, options: AlertQueryOptions): Promise<Alert[]>
+  refresh(sourceId: string): Promise<void>
+  sourceState(sourceId: string): Omit<AlertCollectionView, 'openCount'> | null
+  collected(sourceId: string): readonly { status: Alert['status'] }[]
 }
 
 export function createDataSourceOperationsService(
   service: DataSourceOperationsStore,
-  alertStream: AlertStreamIngestor,
+  alerts: AlertCollection,
 ): DataSourceOperationsService {
+  const collectionOf = (id: string): AlertCollectionView | null => {
+    const state = alerts.sourceState(id)
+    if (!state) return null
+    const openCount = alerts.collected(id).filter((a) => a.status === 'active').length
+    return { ...state, openCount }
+  }
   return {
     listByCapability: (capability) => service.listByCapability(capability),
     listPluginTypes: () => {
@@ -95,13 +104,13 @@ export function createDataSourceOperationsService(
     getFilterOptions: (id) => service.getFilterOptions(id),
     getAlerts: async (id, options) => {
       if (!(await service.hasAlertsCapability(id))) return null
-      const alerts = await service.getAlerts(id, options)
-      const fullActiveSet =
-        options.timeRange === undefined && options.minSeverity === undefined && !options.activeOnly
-      alertStream
-        .ingestAlerts(id, null, alerts, { fullActiveSet })
-        .catch((error) => console.error('[Datasources] alert stream ingest failed:', error))
-      return alerts
+      return alerts.read(id, options)
+    },
+    getAlertCollection: (id) => collectionOf(id),
+    refreshAlerts: async (id) => {
+      if (!alerts.sourceState(id)) return null
+      await alerts.refresh(id)
+      return collectionOf(id)
     },
     callNative: async (id, method, params) => {
       const plugin = await service.getPlugin(id)

@@ -16,15 +16,19 @@ import {
 } from '../plugins/index.js'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import type {
-  Alert,
-  AlertQueryOptions,
   ConnectionResult,
   DiscoveredMetric,
   Host,
   HostItem,
   InterfaceNeighbor,
 } from '../plugins/types.js'
-import type { DataSource, DataSourceInput, DataSourceStatus, DataSourceType } from '../types.js'
+import type {
+  DataSource,
+  DataSourceInput,
+  DataSourceStatus,
+  DataSourceType,
+  PollingOverride,
+} from '../types.js'
 
 interface DataSourceRow {
   id: string
@@ -37,6 +41,28 @@ interface DataSourceRow {
   fail_count: number
   created_at: number
   updated_at: number
+  polling_json: string | null
+}
+
+function parsePolling(json: string | null): PollingOverride | undefined {
+  if (!json) return undefined
+  try {
+    const value = JSON.parse(json) as Record<string, unknown>
+    const out: PollingOverride = {}
+    for (const key of ['alertsMs', 'metricsMs'] as const) {
+      const n = value[key]
+      if (typeof n === 'number' && Number.isFinite(n) && n >= 0) out[key] = n
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The override to store: only the set, sane values; null when none is left. */
+function pollingJson(polling: PollingOverride | null | undefined): string | null {
+  const clean = parsePolling(polling ? JSON.stringify(polling) : null)
+  return clean ? JSON.stringify(clean) : null
 }
 
 export interface AttachedTopology {
@@ -56,6 +82,7 @@ function rowToDataSource(row: DataSourceRow): DataSource {
     failCount: row.fail_count,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    polling: parsePolling(row.polling_json),
   }
 }
 
@@ -184,10 +211,10 @@ export class DataSourceService {
 
     this.db
       .query(
-        `INSERT INTO data_sources (id, name, type, config_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO data_sources (id, name, type, config_json, created_at, updated_at, polling_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, input.name, input.type, configJson, now, now)
+      .run(id, input.name, input.type, configJson, now, now, pollingJson(input.polling))
 
     // biome-ignore lint/style/noNonNullAssertion: temporary ignored: related #65
     return this.get(id)!
@@ -231,6 +258,11 @@ export class DataSourceService {
 
       updates.push('config_json = ?')
       values.push(JSON.stringify(newConfig))
+    }
+
+    if (input.polling !== undefined) {
+      updates.push('polling_json = ?')
+      values.push(pollingJson(input.polling))
     }
 
     if (updates.length === 0) {
@@ -383,18 +415,6 @@ export class DataSourceService {
       return null
     }
     return (plugin as import('shumoku-plugin-netbox').NetBoxPlugin).getFilterOptions()
-  }
-
-  /**
-   * Get alerts from a data source (if supported)
-   */
-  async getAlerts(id: string, options?: AlertQueryOptions): Promise<Alert[]> {
-    const plugin = await this.getPlugin(id)
-    if (!plugin || !hasAlertsCapability(plugin)) {
-      return []
-    }
-
-    return plugin.getAlerts(options)
   }
 
   /**

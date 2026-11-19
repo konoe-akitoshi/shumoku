@@ -64,6 +64,16 @@ export interface AttachedTopologyView {
   name: string
 }
 
+/** How collecting one source's alerts goes (`services/alert-collector.ts`). */
+export interface AlertCollectionView {
+  state: 'ok' | 'failing' | 'never' | 'off'
+  lastSuccessAt: number | null
+  lastAttemptAt: number | null
+  lastError: string | null
+  failCount: number
+  openCount: number
+}
+
 export interface DataSourceOperationsService {
   listByCapability(capability: 'topology' | 'metrics' | 'alerts'): DataSource[]
   listPluginTypes(): DataSourcePluginView[]
@@ -80,6 +90,10 @@ export interface DataSourceOperationsService {
     tags: { slug: string; name: string }[]
   } | null>
   getAlerts(id: string, options: AlertQueryOptions): Promise<Alert[] | null>
+  /** How the Server's collection of a source's alerts goes; null when it does not collect it. */
+  getAlertCollection(id: string): AlertCollectionView | null
+  /** Collect a source's alerts now; null when it does not collect it. */
+  refreshAlerts(id: string): Promise<AlertCollectionView | null>
   callNative(
     id: string,
     method: string,

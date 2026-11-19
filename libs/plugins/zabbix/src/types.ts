@@ -2,7 +2,6 @@
 export interface ZabbixPluginConfig {
   url: string
   token: string
-  pollInterval?: number
   /** Skip TLS certificate verification (self-signed / private-CA upstreams). */
   insecure?: boolean
   /**

@@ -13,6 +13,7 @@
   import { api } from '$lib/api'
   import { copyTextToClipboard } from '$lib/clipboard'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
+  import DataSourcePolling from '$lib/components/settings/DataSourcePolling.svelte'
   import { dataSources } from '$lib/stores'
   import type {
     ConnectionResult,
@@ -114,7 +115,6 @@ ${e instanceof Error ? e.message : String(e)}`)
   interface ParsedConfig {
     url?: string
     token?: string
-    pollInterval?: number
     insecure?: boolean
     useWebhook?: boolean
     webhookSecret?: string
@@ -509,6 +509,14 @@ ${e instanceof Error ? e.message : String(e)}`)
             {/if}
           </div>
         </div>
+
+        <DataSourcePolling
+          {dataSource}
+          capabilities={pluginTypes.find((p) => p.type === dataSource?.type)?.capabilities ?? []}
+          onsaved={(updated) => {
+            dataSource = updated
+          }}
+        />
 
         <!-- Info -->
         <div class="card mt-4">

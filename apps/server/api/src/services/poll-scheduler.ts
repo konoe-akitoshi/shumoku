@@ -29,6 +29,12 @@ export interface PollSchedulerConfig {
   concurrencyLimit: number
   /** Maximum random jitter added to each reschedule in ms. Default 1000. */
   jitterMax: number
+  /**
+   * A topology's own cadence (ms), when its sources set one: the shortest metrics interval of
+   * the data sources it reads while watched, and no faster than `slowInterval` while not.
+   * Absent: `fastInterval` / `slowInterval` for every topology.
+   */
+  cadenceOf?: (topologyId: string, watched: boolean) => number | undefined
 }
 
 export interface TopologyScheduleState {
@@ -250,6 +256,13 @@ export class PollScheduler {
     }, actualDelay)
   }
 
+  /** How long until a topology's next poll: its own cadence, or the fixed fast / slow one. */
+  private cadence(topologyId: string, watched: boolean): number {
+    const own = this.config.cadenceOf?.(topologyId, watched)
+    if (own !== undefined && Number.isFinite(own) && own > 0) return own
+    return watched ? this.config.fastInterval : this.config.slowInterval
+  }
+
   private runPoll(topologyId: string): void {
     const state = this.states.get(topologyId)
     if (!state || !this.started) return
@@ -257,7 +270,7 @@ export class PollScheduler {
     if (state.inFlight) {
       // Overlap guard: this topology's previous poll is still running.
       // Reschedule at current cadence without starting a second poll.
-      const cadence = state.isWatched ? this.config.fastInterval : this.config.slowInterval
+      const cadence = this.cadence(topologyId, state.isWatched)
       this.scheduleNext(topologyId, cadence)
       return
     }
@@ -300,7 +313,7 @@ export class PollScheduler {
         this.drainQueue()
         // Reschedule for this topology
         if (s && this.started) {
-          const cadence = s.isWatched ? this.config.fastInterval : this.config.slowInterval
+          const cadence = this.cadence(s.topologyId, s.isWatched)
           this.scheduleNext(topologyId, cadence)
         }
       })

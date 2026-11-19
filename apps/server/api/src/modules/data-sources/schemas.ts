@@ -1,6 +1,14 @@
 import { z } from '@hono/zod-openapi'
 import type { PluginConfigProperty } from '@shumoku/core'
 
+/** A data source's own polling intervals (ms) over the server-wide defaults; alertsMs 0: off. */
+export const PollingOverrideSchema = z
+  .object({
+    alertsMs: z.number().int().min(0).optional(),
+    metricsMs: z.number().int().min(0).optional(),
+  })
+  .openapi('PollingOverride')
+
 export const DataSourceSchema = z
   .object({
     id: z.string(),
@@ -13,6 +21,7 @@ export const DataSourceSchema = z
     failCount: z.number().int(),
     createdAt: z.number().int(),
     updatedAt: z.number().int(),
+    polling: PollingOverrideSchema.optional(),
   })
   .openapi('DataSource')
 
@@ -30,6 +39,8 @@ export const CreateDataSourceSchema = z
     name: z.string().min(1),
     type: z.string().min(1),
     configJson: z.string().min(1),
+    /** `{}` clears the override. */
+    polling: PollingOverrideSchema.optional(),
   })
   .openapi('CreateDataSource')
 
@@ -256,6 +267,17 @@ export const AlertSchema = z
   .openapi('Alert')
 
 export const AlertListSchema = z.array(AlertSchema).openapi('AlertList')
+
+export const AlertCollectionSchema = z
+  .object({
+    state: z.enum(['ok', 'failing', 'never', 'off']),
+    lastSuccessAt: z.number().nullable(),
+    lastAttemptAt: z.number().nullable(),
+    lastError: z.string().nullable(),
+    failCount: z.number(),
+    openCount: z.number(),
+  })
+  .openapi('AlertCollection')
 
 export const NativeApiRequestSchema = z
   .object({

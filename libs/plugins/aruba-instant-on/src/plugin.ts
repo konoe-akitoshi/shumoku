@@ -212,7 +212,8 @@ export class ArubaInstantOnPlugin
   // ============================================================
 
   async getAlerts(_options?: AlertQueryOptions): Promise<Alert[]> {
-    if (!this.api) return []
+    // Thrown, not empty: the Server reads a missing alert as resolved.
+    if (!this.api) throw new Error('Aruba Instant On plugin is not initialized')
     // Inventory devices embed their own `activeAlerts` array — pull alerts
     // from there rather than the site /alerts endpoint, since the inventory
     // call is already required by pollMetrics and the embedded shape carries

@@ -4,7 +4,7 @@
 
 import * as fs from 'node:fs'
 import * as path from 'node:path'
-import { linkSpeedBps } from '@shumoku/core'
+import { hasAlertsCapability, linkSpeedBps } from '@shumoku/core'
 import type { Server as BunServer, ServerWebSocket } from 'bun'
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
@@ -30,7 +30,7 @@ import { createTopologySyncApplicationService } from './app/topology-sync.js'
 import { createWebhookApplicationService } from './app/webhooks.js'
 import { getProxyAuthConfig } from './auth/proxy-auth.js'
 import { admitWebSocketUpgrade } from './auth/resolve-principal.js'
-import { closeDatabase, initDatabase } from './db/index.js'
+import { closeDatabase, getDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
 import { apiError } from './openapi/common.js'
 import { createApiRouter } from './openapi/router.js'
@@ -40,6 +40,7 @@ import {
   pluginRegistry,
   registerBundledPlugins,
 } from './plugins/index.js'
+import { AlertCollector } from './services/alert-collector.js'
 import {
   assertAuthenticationReady,
   bootstrapAdminAuthentication,
@@ -60,9 +61,11 @@ import {
 import { aggregateMetricsData, type MetricsSourcePoll } from './services/metrics-merge.js'
 import { ObservationsService } from './services/observations.js'
 import { PollScheduler } from './services/poll-scheduler.js'
+import { PollingPolicy } from './services/polling.js'
 import { SettingsService } from './services/settings.js'
 import { getSignalStreams } from './services/signal-streams.js'
 import {
+  getSyncScheduler,
   getSyncSchedulerStatus,
   startSyncScheduler,
   stopSyncScheduler,
@@ -99,6 +102,21 @@ export class Server {
     (topology) => this.pollScheduler?.notifyWatchChanged(topology),
   )
   private pollScheduler: PollScheduler | null = null
+  /** Collects every alert source once; every reader reads what it found. */
+  private alertCollector: AlertCollector | null = null
+  /** How often each data source is read: Settings defaults and per-source overrides. */
+  private pollingPolicy: PollingPolicy | null = null
+  /**
+   * Each (topology, source)'s last metrics poll, reused until the source is due again: its
+   * reading, or its failure (so a failing source is not asked again before its interval). Only
+   * reused for the same data source configuration and the same mapping (`version`).
+   */
+  private readonly lastSourcePoll = new Map<
+    string,
+    { at: number; version: string; poll?: MetricsSourcePoll; error?: string }
+  >()
+  /** Bumped by every mapping save, so a poll made for the old mapping is not reused. */
+  private readonly mappingGeneration = new Map<string, number>()
   private housekeepingInterval: ReturnType<typeof setInterval> | null = null
   /** Tells each client when a topology it watches was drawn again or its mapping changed. */
   private versionInterval: ReturnType<typeof setInterval> | null = null
@@ -258,8 +276,18 @@ export class Server {
       return this.live.isWatched(topologyId)
     }
 
+    // A topology polls as often as the most often read of its metrics sources wants (each
+    // source's own interval: Settings default or its override); unwatched, at most once a
+    // background interval.
+    const cadenceOf = (topologyId: string, watched: boolean): number | undefined => {
+      const sources = this.topologySourcesService?.listByPurpose(topologyId, 'metrics') ?? []
+      if (sources.length === 0) return undefined
+      const shortest = Math.min(...sources.map((s) => this.polling().metricsMs(s.dataSourceId)))
+      return watched ? shortest : Math.max(shortest, slowInterval)
+    }
+
     this.pollScheduler = new PollScheduler(
-      { fastInterval, slowInterval, concurrencyLimit, jitterMax: 1000 },
+      { fastInterval, slowInterval, concurrencyLimit, jitterMax: 1000, cadenceOf },
       (topologyId) => this.pollTopology(topologyId),
       getTopologyIds,
       isWatched,
@@ -278,6 +306,8 @@ export class Server {
       const sched = this.pollScheduler
       // Mapping save → immediate poll (Item 3, #569).
       this.topologyService.setMappingWriteHook((topologyId) => {
+        // A new mapping: read every source again, not what was read for the old one.
+        this.mappingGeneration.set(topologyId, (this.mappingGeneration.get(topologyId) ?? 0) + 1)
         sched.pokeTopology(topologyId)
       })
       // Topology create/delete → register/unregister with the scheduler. The
@@ -286,7 +316,10 @@ export class Server {
       // last live subscriber disconnects.
       this.topologyService.setTopologyLifecycleHook((topologyId, event) => {
         if (event === 'created') sched.addTopology(topologyId)
-        else sched.removeTopology(topologyId)
+        else {
+          sched.removeTopology(topologyId)
+          this.forgetSourcePolls(topologyId, new Set())
+        }
       })
     }
 
@@ -335,6 +368,7 @@ export class Server {
     // entity are expected: their readings are redundant evidence, not a
     // collision to resolve by choosing a winner.
     const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
+    this.forgetSourcePolls(topology.id, new Set(metricsSources.map((s) => s.dataSourceId)))
     if (metricsSources.length > 0) {
       const mappingsBySource = this.topologyService.buildMappingsBySource(
         topology.id,
@@ -350,6 +384,16 @@ export class Server {
         metricsSources.map(async (source) => {
           const dataSource = this.dataSourceService?.get(source.dataSourceId)
           if (!dataSource) return null
+          // Not due yet (its own interval is longer than the topology's cadence): its last
+          // reading still stands in the merge, so redundancy and priority see every source.
+          const cacheKey = `${topology.id}\u0000${dataSource.id}`
+          const version = `${dataSource.updatedAt}\u0000${this.mappingGeneration.get(topology.id) ?? 0}`
+          const last = this.lastSourcePoll.get(cacheKey)
+          const due = this.polling().metricsMs(dataSource.id)
+          if (last && last.version === version && Date.now() - last.at < due - 1000) {
+            if (last.poll) return last.poll
+            throw new Error(last.error ?? 'Datasource poll failed')
+          }
           const config = JSON.parse(dataSource.configJson)
           const plugin = await pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
           if (!hasMetricsCapability(plugin)) return null
@@ -369,7 +413,14 @@ export class Server {
               if (bps !== undefined) mapping.links[linkId] = { ...linkMapping, bandwidth: bps }
             }
           }
-          const polledData = await plugin.pollMetrics(mapping)
+          let polledData: Awaited<ReturnType<typeof plugin.pollMetrics>>
+          try {
+            polledData = await plugin.pollMetrics(mapping)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            this.lastSourcePoll.set(cacheKey, { at: Date.now(), version, error: message })
+            throw error
+          }
           const nodes = { ...polledData.nodes }
           const links = { ...polledData.links }
           // A configured binding that returns no sample is still evidence about
@@ -386,10 +437,12 @@ export class Server {
           for (const linkId of Object.keys(mapping.links)) {
             if (!links[linkId]) links[linkId] = { status: 'unknown' }
           }
-          return {
+          const poll: MetricsSourcePoll = {
             source: { id: dataSource.id, name: dataSource.name, type: dataSource.type },
             data: { ...polledData, nodes, links },
           }
+          this.lastSourcePoll.set(cacheKey, { at: Date.now(), version, poll })
+          return poll
         }),
       )
 
@@ -481,10 +534,59 @@ export class Server {
     this.app.route('/api', createApiRouter(this.createAppServices()))
   }
 
+  /**
+   * One alert collector for the process: every alert-capable data source, asked for its open
+   * alerts on an interval. The plugin is asked directly (not `DataSourceService.getAlerts`,
+   * which answers an empty list for a source it cannot reach: here that would resolve
+   * everything).
+   */
+  /** Drop the kept polls of a topology's sources that it no longer reads (or of all of them). */
+  private forgetSourcePolls(topologyId: string, keep: ReadonlySet<string>): void {
+    const prefix = `${topologyId}\u0000`
+    for (const key of this.lastSourcePoll.keys()) {
+      if (key.startsWith(prefix) && !keep.has(key.slice(prefix.length))) {
+        this.lastSourcePoll.delete(key)
+      }
+    }
+  }
+
+  private polling(): PollingPolicy {
+    if (this.pollingPolicy) return this.pollingPolicy
+    const settings = new SettingsService()
+    const dataSources = new DataSourceService()
+    this.pollingPolicy = new PollingPolicy({
+      setting: (key) => settings.get(key),
+      override: (id) => dataSources.get(id)?.polling,
+      envMetricsMs: this.config.server.pollInterval,
+    })
+    return this.pollingPolicy
+  }
+
+  private createAlertCollector(dataSources: DataSourceService): AlertCollector {
+    if (this.alertCollector) return this.alertCollector
+    const polling = this.polling()
+    this.alertCollector = new AlertCollector({
+      db: getDatabase(),
+      listSources: () => dataSources.listByCapability('alerts').map((source) => source.id),
+      exists: (id) => dataSources.get(id) !== null,
+      // 0: not collected (`off`), keeping what was collected.
+      intervalMs: (id) => polling.alertsMs(id),
+      fetchAlerts: async (id) => {
+        const plugin = await dataSources.getPlugin(id)
+        if (!plugin || !hasAlertsCapability(plugin)) {
+          throw new Error('Data source cannot report alerts')
+        }
+        return plugin.getAlerts({ activeOnly: true })
+      },
+    })
+    return this.alertCollector
+  }
+
   private createAppServices(): AppServices {
     const topologyService = this.topologyService
     if (!topologyService) throw new Error('Topology service is not initialized')
     const dataSourceService = new DataSourceService()
+    const alertCollector = this.createAlertCollector(dataSourceService)
     const observationsService = new ObservationsService()
     const topologySourcesService = new TopologySourcesService()
     const dashboardService = getDashboardService()
@@ -493,8 +595,8 @@ export class Server {
       admin: { getStatus: () => this.getAdminStatus() },
       auth: createAuthApplicationService(),
       dataSources: {
-        crud: createDataSourceCrudService(dataSourceService, topologyService),
-        operations: createDataSourceOperationsService(dataSourceService, getSignalStreams()),
+        crud: createDataSourceCrudService(dataSourceService, topologyService, alertCollector),
+        operations: createDataSourceOperationsService(dataSourceService, alertCollector),
         scan: createDataSourceScanService(dataSourceService, observationsService, topologyService),
       },
       dashboards: createDashboardApplicationService(dashboardService),
@@ -532,6 +634,7 @@ export class Server {
         topologies: topologyService,
         dashboards: dashboardService,
         dataSources: dataSourceService,
+        alerts: alertCollector,
       }),
       webhooks: createWebhookApplicationService({
         topologies: topologyService,
@@ -618,6 +721,7 @@ export class Server {
     // topology source on the cadence its topology default configures.
     // Set SHUMOKU_DISCOVERY_SCHEDULER=off to disable (dev / debugging).
     startSyncScheduler()
+    getSyncScheduler().setDefaultInterval(() => this.polling().syncMs())
   }
 
   async start(): Promise<void> {
@@ -675,7 +779,8 @@ export class Server {
 
     console.log(`[Server] Running at http://${this.config.server.host}:${this.config.server.port}`)
 
-    // Start metrics polling after server is listening (may block on slow data sources)
+    // Collect alerts and poll metrics after the server is listening (sources may be slow).
+    this.alertCollector?.start()
     await this.startMetricsPolling()
   }
 
@@ -691,6 +796,7 @@ export class Server {
       this.pollScheduler.stop()
       this.pollScheduler = null
     }
+    this.alertCollector?.stop()
     if (this.housekeepingInterval) {
       clearInterval(this.housekeepingInterval)
       this.housekeepingInterval = null

@@ -28,16 +28,34 @@ function validateConfigForType(type: string, configJson: string): void {
   }
 }
 
+/** The alert collection follows the data sources: a new one is collected, a gone one dropped. */
+interface AlertSourcesFollower {
+  syncSources(): void
+  refresh(sourceId: string): Promise<void>
+}
+
 export function createDataSourceCrudService(
   service: DataSourceStore,
   topologyCache: TopologyCacheInvalidator,
+  alertSources?: AlertSourcesFollower,
 ): DataSourceCrudService {
+  const follow = (id?: string) => {
+    alertSources?.syncSources()
+    // A changed configuration (an address, a token) is collected with at once.
+    if (id) {
+      alertSources?.refresh(id).catch((error) => {
+        console.error(`[DataSources] alert refresh of ${id} failed:`, error)
+      })
+    }
+  }
   return {
     list: () => service.list().filter((dataSource) => dataSource.type !== DEEP_READ_TYPE),
     get: (id) => service.get(id),
     create: async (input) => {
       validateConfigForType(input.type, input.configJson)
-      return service.create(input)
+      const created = await service.create(input)
+      follow()
+      return created
     },
     update: async (id, input: Partial<DataSourceInput>) => {
       if (input.configJson !== undefined) {
@@ -46,12 +64,17 @@ export function createDataSourceCrudService(
       }
 
       const dataSource = await service.update(id, input)
-      if (dataSource) topologyCache.clearCacheForDataSource(id)
+      if (dataSource) {
+        topologyCache.clearCacheForDataSource(id)
+        follow(id)
+      }
       return dataSource
     },
     delete: (id) => {
       topologyCache.clearCacheForDataSource(id)
-      return service.delete(id)
+      const deleted = service.delete(id)
+      follow()
+      return deleted
     },
   }
 }

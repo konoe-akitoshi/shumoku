@@ -9,6 +9,7 @@ import {
   unauthorizedResponse,
 } from '../../openapi/common.js'
 import {
+  AlertCollectionSchema,
   AlertListSchema,
   AlertQuerySchema,
   DataSourceIdParamsSchema,
@@ -133,6 +134,45 @@ const alertsRoute = createRoute({
   },
 })
 
+const notCollectedResponse = {
+  description: 'The data source does not report alerts',
+  content: { 'application/json': { schema: ErrorSchema } },
+}
+
+const alertCollectionRoute = createRoute({
+  method: 'get',
+  path: '/{id}/alerts/collection',
+  tags: ['Data Sources'],
+  summary: "How the Server's collection of a data source's alerts goes",
+  security: protectedRouteSecurity,
+  request: { params: DataSourceIdParamsSchema },
+  responses: {
+    200: {
+      description: 'Collection state',
+      content: { 'application/json': { schema: AlertCollectionSchema } },
+    },
+    401: unauthorizedResponse,
+    404: notCollectedResponse,
+  },
+})
+
+const alertRefreshRoute = createRoute({
+  method: 'post',
+  path: '/{id}/alerts/refresh',
+  tags: ['Data Sources'],
+  summary: "Collect a data source's alerts now",
+  security: protectedRouteSecurity,
+  request: { params: DataSourceIdParamsSchema },
+  responses: {
+    200: {
+      description: 'Collection state after the poll',
+      content: { 'application/json': { schema: AlertCollectionSchema } },
+    },
+    401: unauthorizedResponse,
+    404: notCollectedResponse,
+  },
+})
+
 const nativeRoute = createRoute({
   method: 'post',
   path: '/{id}/_native',
@@ -223,6 +263,18 @@ export function createDataSourceRuntimeApi(services: {
     } catch (error) {
       return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
+  })
+  app.openapi(alertCollectionRoute, (c) => {
+    const collection = service.getAlertCollection(c.req.valid('param').id)
+    if (!collection)
+      return c.json(apiErrorPayload(c, 'Data source does not report alerts', 404), 404)
+    return c.json(collection, 200)
+  })
+  app.openapi(alertRefreshRoute, async (c) => {
+    const collection = await service.refreshAlerts(c.req.valid('param').id)
+    if (!collection)
+      return c.json(apiErrorPayload(c, 'Data source does not report alerts', 404), 404)
+    return c.json(collection, 200)
   })
   app.openapi(nativeRoute, async (c) => {
     if (process.env['NODE_ENV'] !== 'development') {

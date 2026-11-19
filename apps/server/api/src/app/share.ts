@@ -1,3 +1,4 @@
+import type { Alert, AlertQueryOptions } from '@shumoku/core'
 import {
   publicAlert,
   publicDashboardLayout,
@@ -66,8 +67,10 @@ export function createShareApplicationService(dependencies: {
   topologies: TopologyService
   dashboards: DashboardService
   dataSources: DataSourceService
+  /** The Server's alert collection: a shared dashboard reads what it found, never the plugin. */
+  alerts: { read(sourceId: string, options: AlertQueryOptions): Promise<Alert[]> }
 }): ShareApplicationService {
-  const { topologies, dashboards, dataSources } = dependencies
+  const { topologies, dashboards, dataSources, alerts } = dependencies
   const dashboardGrant = (token: string): ReachableSet | null => {
     const dashboard = dashboards.getByShareToken(token)
     return dashboard ? referencedIds(dashboard.layoutJson) : null
@@ -127,9 +130,12 @@ export function createShareApplicationService(dependencies: {
         return failure(400, 'Data source does not support alerts')
       }
       try {
-        return { ok: true, value: (await dataSources.getAlerts(id, options)).map(publicAlert) }
+        return { ok: true, value: (await alerts.read(id, options)).map(publicAlert) }
       } catch (error) {
-        return failure(500, error instanceof Error ? error.message : String(error))
+        // The upstream's own words (an address, a status) stay in the Server's log; a public
+        // viewer learns only that the alerts could not be read.
+        console.error('[share] alerts from data source failed:', error)
+        return failure(500, 'Alerts are unavailable')
       }
     },
     topologyStreamId: (token) => topologies.getByShareToken(token)?.id ?? null,

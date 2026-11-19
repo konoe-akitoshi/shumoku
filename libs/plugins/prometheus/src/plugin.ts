@@ -556,8 +556,7 @@ export class PrometheusPlugin
     try {
       const response = await this.fetchAlertmanager(alertmanagerUrl, '/api/v2/alerts')
       if (!response.ok) {
-        console.error('[PrometheusPlugin] Alertmanager API error:', response.status)
-        return []
+        throw new Error(`Alertmanager API error: HTTP ${response.status}`)
       }
 
       // One shared Alertmanager parser (active/timeRange/minSeverity filters,
@@ -565,8 +564,10 @@ export class PrometheusPlugin
       const raw = (await response.json()) as AlertmanagerAlert[]
       return parseAlertmanagerAlerts(raw, { source: 'prometheus', query: options })
     } catch (err) {
+      // Thrown, not an empty list: a monitoring system that cannot be reached must not read as
+      // one with no alerts (a wall display would say "All clear" while blind).
       console.error('[PrometheusPlugin] Failed to fetch alerts:', err)
-      return []
+      throw err instanceof Error ? err : new Error(String(err))
     }
   }
 

@@ -230,6 +230,13 @@ export class SyncScheduler {
   private intervalId: ReturnType<typeof setInterval> | null = null
   private isRunning = false
   private tickInFlight = false
+  /** The sync interval when a topology's own policy sets none (the Settings default). */
+  private defaultIntervalMs: () => number = () => RUNTIME_DEFAULT.intervalMs
+
+  /** Where the default interval comes from (the Server's polling settings). */
+  setDefaultInterval(source: () => number): void {
+    this.defaultIntervalMs = source
+  }
 
   constructor() {
     this.topologyService = new TopologyService()
@@ -319,7 +326,11 @@ export class SyncScheduler {
         })
         if (effective.mode === 'disabled') continue
 
-        const intervalMs = Math.max(effective.intervalMs, MIN_SYNC_INTERVAL_MS)
+        const ownMs =
+          effective.source.intervalMs === 'default'
+            ? this.defaultIntervalMs()
+            : effective.intervalMs
+        const intervalMs = Math.max(ownMs, MIN_SYNC_INTERVAL_MS)
         for (const source of sources) {
           // Established by construction (filtered above) — so `lastSyncedAt` is
           // set. Default only to satisfy the nullable type.

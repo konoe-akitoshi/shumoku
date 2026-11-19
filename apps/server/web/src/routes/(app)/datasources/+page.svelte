@@ -77,7 +77,7 @@
   }
 
   /** Parse a stored config_json for read-only display in the table. */
-  function parseConfig(configJson: string): { url?: string; pollInterval?: number } {
+  function parseConfig(configJson: string): { url?: string } {
     try {
       return JSON.parse(configJson)
     } catch {

@@ -22,18 +22,6 @@ const configSchema: PluginConfigSchema = {
       default: false,
       warning: 'Disables certificate validation. Self-signed certs in trusted networks only.',
     },
-    pollInterval: {
-      type: 'number',
-      title: 'Polling interval',
-      default: 60000,
-      oneOf: [
-        { const: 5000, title: '5 seconds' },
-        { const: 10000, title: '10 seconds' },
-        { const: 30000, title: '30 seconds' },
-        { const: 60000, title: '1 minute' },
-        { const: 300000, title: '5 minutes' },
-      ],
-    },
   },
 }
 

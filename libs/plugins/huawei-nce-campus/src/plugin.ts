@@ -304,7 +304,8 @@ export class HuaweiNceCampusPlugin
   // ============================================================
 
   async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
-    if (!this.api) return []
+    // Thrown, not empty: the Server reads a missing alert as resolved.
+    if (!this.api) throw new Error('Huawei NCE plugin is not initialized')
     const alarms: NceAlarm[] = []
     let iterator: string | undefined
     while (alarms.length < ALARM_LIMIT) {
@@ -316,6 +317,11 @@ export class HuaweiNceCampusPlugin
       alarms.push(...items)
       if (items.length < ALARM_BATCH || !page.iterator) break
       iterator = page.iterator
+    }
+    // Stopped at the cap with more to read: the list would not be every open alarm, and the
+    // Server would read the ones left out as cleared.
+    if (alarms.length >= ALARM_LIMIT) {
+      throw new Error(`More than ${ALARM_LIMIT} current alarms: the list would be incomplete`)
     }
 
     const cutoff = Date.now() - (options?.timeRange ?? 3600) * 1000

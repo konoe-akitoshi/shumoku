@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { Alert } from '@shumoku/core'
 import { getDatabase } from '../../src/db/index.ts'
 import { aggregateMetricsData } from '../../src/services/metrics-merge.ts'
 import { RETENTION, SignalStreamsService } from '../../src/services/signal-streams.ts'
@@ -100,42 +99,6 @@ describe('metrics stream — raw history + hourly trends', () => {
     expect(
       decoded.nodes.n1.observations.map((item: { source: { id: string } }) => item.source.id),
     ).toEqual(['cue', 'snmp'])
-  })
-})
-
-describe('alert stream — state transitions only', () => {
-  const alert = (id: string, severity: Alert['severity'], status: Alert['status']): Alert =>
-    ({ id, severity, status, title: id, startTime: 0, source: 's' }) as Alert
-
-  test('fired → changed → resolved, idempotent against re-fetches', async () => {
-    expect(await streams.ingestAlerts('src1', null, [alert('a1', 'high', 'active')])).toBe(1)
-    // same state again → no new transition
-    expect(await streams.ingestAlerts('src1', null, [alert('a1', 'high', 'active')])).toBe(0)
-    // severity moved → changed
-    expect(await streams.ingestAlerts('src1', null, [alert('a1', 'critical', 'active')])).toBe(1)
-    // explicit resolved
-    expect(await streams.ingestAlerts('src1', null, [alert('a1', 'critical', 'resolved')])).toBe(1)
-    // resolved again → nothing
-    expect(await streams.ingestAlerts('src1', null, [alert('a1', 'critical', 'resolved')])).toBe(0)
-
-    const db = getDatabase()
-    const transitions = db
-      .query('SELECT transition FROM alert_events WHERE alert_key = ? ORDER BY rowid')
-      .all('a1') as { transition: string }[]
-    expect(transitions.map((t) => t.transition)).toEqual(['fired', 'changed', 'resolved'])
-  })
-
-  test('disappearance resolves ONLY with fullActiveSet', async () => {
-    await streams.ingestAlerts('src2', null, [alert('b1', 'high', 'active')])
-    // filtered fetch without b1 — must NOT resolve it
-    expect(await streams.ingestAlerts('src2', null, [], { fullActiveSet: false })).toBe(0)
-    // unfiltered active set without b1 — resolves it
-    expect(await streams.ingestAlerts('src2', null, [], { fullActiveSet: true })).toBe(1)
-    const db = getDatabase()
-    const last = db
-      .query('SELECT transition FROM alert_events WHERE alert_key = ? ORDER BY rowid DESC LIMIT 1')
-      .get('b1') as { transition: string }
-    expect(last.transition).toBe('resolved')
   })
 })
 

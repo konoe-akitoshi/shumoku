@@ -2,6 +2,7 @@
   import { ArrowsClockwiseIcon, FileTextIcon, GithubLogoIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api, auth } from '$lib/api'
+  import PollingSettings from '$lib/components/settings/PollingSettings.svelte'
   import { preferences } from '$lib/stores'
   import { authAccess } from '$lib/stores/auth'
   import type { SystemInfo } from '$lib/types'
@@ -139,6 +140,8 @@
           </p>
         </div>
       </div>
+
+      <PollingSettings />
 
       <!-- Server Info -->
       <div class="card">

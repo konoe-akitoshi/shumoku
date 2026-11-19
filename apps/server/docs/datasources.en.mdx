@@ -15,6 +15,18 @@ Data sources provide live metrics and topology data to Shumoku Server. The serve
 5. Click **Test Connection** to verify
 6. Save
 
+## How Often Data Sources Are Read
+
+The Server reads each data source on an interval, set in two places, both kept on the Server and used by it:
+
+- **Polling on the Settings page**: the defaults for every data source.
+  - **Alerts**: how often each monitoring system is asked for its open alerts (30 s by default). The Server collects them in one place and every screen (shared dashboards included) sees the same result; more screens do not mean more queries.
+  - **Metrics**: how often traffic and device status are read while someone watches a topology (30 s by default; once a minute while nobody does). Most Zabbix items update once a minute, so a shorter interval brings no newer values.
+  - **Topology sync**: how often a topology's structure (NetBox, LLDP, …) is read again (30 min by default).
+- **Polling on a data source's page**: that data source's own override, for the exceptions: a longer interval for a cloud API with a tight rate limit, or Off to not collect its alerts.
+
+A topology that reads several data sources reads each on its own interval, using a source's last values until it is due. When `POLL_INTERVAL` is set, it is the metrics default as long as the Settings page sets none.
+
 ## Zabbix
 
 Pull traffic metrics, host status, and alerts via JSON-RPC API.

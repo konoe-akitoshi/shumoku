@@ -481,6 +481,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/datasources/{id}/alerts/collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the Server's collection of a data source's alerts goes */
+        get: operations["getDatasourcesByIdAlertsCollection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/datasources/{id}/alerts/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Collect a data source's alerts now */
+        post: operations["postDatasourcesByIdAlertsRefresh"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/datasources/{id}/_native": {
         parameters: {
             query?: never;
@@ -1808,6 +1842,11 @@ export interface components {
             failCount: number;
             createdAt: number;
             updatedAt: number;
+            polling?: components["schemas"]["PollingOverride"];
+        };
+        PollingOverride: {
+            alertsMs?: number;
+            metricsMs?: number;
         };
         ConfigOptionsResult: {
             options: {
@@ -1932,6 +1971,15 @@ export interface components {
             labels?: {
                 [key: string]: string;
             };
+        };
+        AlertCollection: {
+            /** @enum {string} */
+            state: "ok" | "failing" | "never" | "off";
+            lastSuccessAt: number | null;
+            lastAttemptAt: number | null;
+            lastError: string | null;
+            failCount: number;
+            openCount: number;
         };
         NativeApiResult: {
             result?: unknown;
@@ -2088,11 +2136,13 @@ export interface components {
             name: string;
             type: string;
             configJson: string;
+            polling?: components["schemas"]["PollingOverride"];
         };
         UpdateDataSource: {
             name?: string;
             type?: string;
             configJson?: string;
+            polling?: components["schemas"]["PollingOverride"];
         };
         DeleteDataSourceResult: {
             /** @enum {boolean} */
@@ -3806,6 +3856,86 @@ export interface operations {
             };
             /** @description The upstream data source request failed */
             500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getDatasourcesByIdAlertsCollection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Collection state */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertCollection"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The data source does not report alerts */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postDatasourcesByIdAlertsRefresh: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Collection state after the poll */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertCollection"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The data source does not report alerts */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
