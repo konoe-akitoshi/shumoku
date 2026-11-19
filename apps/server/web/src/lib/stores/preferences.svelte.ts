@@ -8,7 +8,6 @@
  * applies the same rules before the first paint, so the page does not flash the other theme.
  */
 
-import type { WheelBehavior } from '@shumoku/renderer'
 import { browser } from '$app/environment'
 
 export type ThemeChoice = 'light' | 'dark' | 'system'
@@ -23,8 +22,8 @@ interface Stored {
   liveUpdates: boolean
   showTrafficFlow: boolean
   showNodeStatus: boolean
-  /** `auto` tells a mouse wheel (zoom) from a trackpad (pan); `zoom` / `pan` fix it. */
-  wheelBehavior: WheelBehavior
+  /** What a plain wheel does on a diagram: scroll it (`pan`) or zoom it. */
+  wheelBehavior: WheelChoice
 }
 
 const DEFAULTS: Stored = {
@@ -33,11 +32,14 @@ const DEFAULTS: Stored = {
   liveUpdates: true,
   showTrafficFlow: true,
   showNodeStatus: true,
-  wheelBehavior: 'auto',
+  wheelBehavior: 'pan',
 }
 
-function isWheelBehavior(value: unknown): value is WheelBehavior {
-  return value === 'auto' || value === 'zoom' || value === 'pan'
+export type WheelChoice = 'pan' | 'zoom'
+
+/** A stored `auto` (from before) reads as the default. */
+function isWheelChoice(value: unknown): value is WheelChoice {
+  return value === 'zoom' || value === 'pan'
 }
 
 function isThemeChoice(value: unknown): value is ThemeChoice {
@@ -60,7 +62,7 @@ function read(text: string | null): Stored {
     liveUpdates: flag('liveUpdates'),
     showTrafficFlow: flag('showTrafficFlow'),
     showNodeStatus: flag('showNodeStatus'),
-    wheelBehavior: isWheelBehavior(parsed['wheelBehavior'])
+    wheelBehavior: isWheelChoice(parsed['wheelBehavior'])
       ? parsed['wheelBehavior']
       : DEFAULTS.wheelBehavior,
   }
@@ -79,7 +81,7 @@ class Preferences {
   liveUpdates = $state(DEFAULTS.liveUpdates)
   showTrafficFlow = $state(DEFAULTS.showTrafficFlow)
   showNodeStatus = $state(DEFAULTS.showNodeStatus)
-  wheelBehavior = $state<WheelBehavior>(DEFAULTS.wheelBehavior)
+  wheelBehavior = $state<WheelChoice>(DEFAULTS.wheelBehavior)
 
   /** The theme a shared page's link gives, over the viewer's choice. */
   linked = $state<Theme | null>(null)

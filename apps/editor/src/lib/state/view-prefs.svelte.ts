@@ -1,28 +1,26 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { WheelBehavior } from '@shumoku/renderer'
-
 /**
  * How the diagram is moved, a preference of this browser rather than of a project: what a plain
- * wheel does (`auto` tells a mouse wheel, which zooms, from a trackpad, which pans).
+ * wheel does, `pan` (scroll the view, the default) or `zoom`. Ctrl/⌘ + wheel and pinch zoom
+ * either way. (A stored `auto`, from before, reads as `pan`.)
  */
+export type WheelChoice = 'pan' | 'zoom'
 
 const KEY = 'shumoku.wheelBehavior'
-const BEHAVIORS: readonly WheelBehavior[] = ['auto', 'zoom', 'pan']
 
-function load(): WheelBehavior {
+function load(): WheelChoice {
   try {
-    const stored = localStorage.getItem(KEY)
-    return BEHAVIORS.find((b) => b === stored) ?? 'auto'
+    return localStorage.getItem(KEY) === 'zoom' ? 'zoom' : 'pan'
   } catch {
-    return 'auto'
+    return 'pan'
   }
 }
 
 export const viewPrefs = $state({ wheelBehavior: load() })
 
-export function setWheelBehavior(behavior: WheelBehavior) {
+export function setWheelBehavior(behavior: WheelChoice) {
   viewPrefs.wheelBehavior = behavior
   try {
     localStorage.setItem(KEY, behavior)

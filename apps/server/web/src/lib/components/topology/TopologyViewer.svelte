@@ -70,12 +70,17 @@
 
     /**
      * Camera (pan/zoom) options, forwarded to `attachCamera`. Defaults
-     * to `{}`: a wheel is told apart from a trackpad per burst
-     * (`wheelBehavior: 'auto'`), and a plain left drag is left to the
-     * host (`leftDrag: 'none'`). Pass `false` to disable camera entirely
-     * (e.g. static preview snapshots).
+     * to `{}`: a plain left drag is left to the host (`leftDrag: 'none'`).
+     * Pass `false` to disable camera entirely (e.g. static preview snapshots).
      */
     camera?: CameraOptions | false
+    /**
+     * Who a plain wheel belongs to. `preference` (default): the diagram, as the viewer chose
+     * (Settings → Display: scroll or zoom). `cooperative`: the page around, for a diagram inside a
+     * page that scrolls (a dashboard widget), as Google Maps does when embedded. Ctrl/⌘ + wheel and
+     * pinch zoom the diagram either way, and a hint says so.
+     */
+    wheel?: 'preference' | 'cooperative'
 
     // --- LOD ---
     detail?: DetailOptions
@@ -95,6 +100,7 @@
     mode = 'view',
     interaction = {},
     camera: cameraOptions = {},
+    wheel = 'preference',
     detail = {},
     onselect,
     oncontextmenu,
@@ -159,7 +165,7 @@
       camera = null
       return
     }
-    const c = attachCamera(svgElement, cameraOptions)
+    const c = attachCamera(svgElement, { ...cameraOptions, onPageWheel: showZoomHint })
     camera = c
     return () => {
       c.detach()
@@ -167,10 +173,25 @@
     }
   })
 
-  // What a plain wheel does is the viewer's preference (Settings → Display, kept in this browser), for every page.
+  // What a plain wheel does: the viewer's preference (Settings → Display, kept in this browser),
+  // or the page's in a widget.
   $effect(() => {
-    camera?.setWheelBehavior(preferences.wheelBehavior)
+    camera?.setWheelBehavior(wheel === 'cooperative' ? 'cooperative' : preferences.wheelBehavior)
   })
+
+  // A plain wheel left to the page says how to zoom instead, for a moment (as Google Maps does).
+  const zoomKey =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
+  let zoomHint = $state(false)
+  let zoomHintTimer: ReturnType<typeof setTimeout> | undefined
+  function showZoomHint() {
+    zoomHint = true
+    clearTimeout(zoomHintTimer)
+    zoomHintTimer = setTimeout(() => {
+      zoomHint = false
+    }, 1500)
+  }
+  $effect(() => () => clearTimeout(zoomHintTimer))
 
   // No reset when the scene changes: a rebake polled in the background (a stale or deriving
   // topology, every few seconds) must not throw the view back to the fit. The camera keeps a
@@ -263,6 +284,9 @@
   {#if ctx}
     {@render children?.(ctx)}
   {/if}
+  {#if zoomHint}
+    <div class="zoom-hint" role="status">{zoomKey} + scroll to zoom</div>
+  {/if}
 </div>
 
 <style>
@@ -271,6 +295,26 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+  }
+
+  /* The cooperative wheel's hint: over the diagram, never in the way of the pointer. */
+  .zoom-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgb(0 0 0 / 0.45);
+    color: white;
+    font-size: 0.875rem;
+    font-weight: 500;
+    pointer-events: none;
+    animation: zoom-hint-in 120ms ease-out;
+  }
+  @keyframes zoom-hint-in {
+    from {
+      opacity: 0;
+    }
   }
 
   /* @shumoku/renderer's <svg> fills the viewer */

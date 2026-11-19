@@ -11,9 +11,9 @@
  * stops when nothing moves. Wheel events are read by `camera-wheel.ts`.
  *
  * Inputs:
- * - Wheel: a mouse wheel zooms at the cursor (eased), a trackpad pans; told apart per gesture as
- *   MapLibre does, and `wheelBehavior` overrides the guess. Ctrl/⌘ + wheel and pinch always zoom; Alt + wheel does the
- *   other thing; Shift + wheel scrolls sideways.
+ * - Wheel: what a plain wheel does is `wheelBehavior` (scroll the view by default; no device is
+ *   guessed, see `camera-wheel.ts`). Ctrl/⌘ + wheel and pinch always zoom at the cursor; Alt +
+ *   wheel does the other of scroll and zoom; Shift + wheel scrolls sideways.
  * - Safari's pinch (`gesture*` events).
  * - Drag: middle button, Alt + left, Space + left, and plain left when `leftDrag: 'pan'`.
  *
@@ -33,27 +33,22 @@ import {
   type View,
   zoomAround,
 } from './camera-view.js'
-import {
-  classify,
-  initialClassifier,
-  normalizeWheel,
-  SETTLE_WAIT,
-  settle,
-  type WheelBehavior,
-  type WheelKind,
-  type WheelRates,
-  type WheelSample,
-  wheelIntent,
-} from './camera-wheel.js'
+import { normalizeWheel, type WheelBehavior, type WheelRates, wheelIntent } from './camera-wheel.js'
 
 export type { WheelBehavior } from './camera-wheel.js'
 
 export interface CameraOptions {
   /**
-   * What a plain wheel does: `auto` tells a mouse wheel (zoom) from a trackpad (pan) per burst;
-   * `zoom` and `pan` fix it, for devices the guess gets wrong. Default `auto`.
+   * What a plain wheel does: `pan` scrolls the view (default), `zoom` zooms it, `cooperative`
+   * leaves it to the page around (a diagram embedded in a page that scrolls); Ctrl/⌘ + wheel and
+   * pinch zoom in all three.
    */
   wheelBehavior?: WheelBehavior
+  /**
+   * Called when a plain wheel over the diagram was left to the page (`cooperative`), so the host
+   * can say how to zoom ("Ctrl + scroll to zoom"), as Google Maps does.
+   */
+  onPageWheel?: () => void
   /**
    * What a plain left drag does: `pan` (a viewer), or `none` to leave it to the host (an editor's
    * marquee and element drag). Default `none`. A drag under 4 px stays a click.
@@ -190,7 +185,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   }
   const viewport: SVGGElement = viewportEl
   let leftDrag = options.leftDrag ?? 'none'
-  let wheelBehavior: WheelBehavior = options.wheelBehavior ?? 'auto'
+  let wheelBehavior: WheelBehavior = options.wheelBehavior ?? 'pan'
 
   // =========================================================================
   // State
@@ -347,56 +342,26 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   // Wheel
   // =========================================================================
 
-  let classifier = initialClassifier()
   let pinching = false
 
-  /** The first event of a gesture, held until the next one tells what device it came from. */
-  let waiting: { sample: WheelSample; x: number; y: number } | null = null
-  let waitTimer: ReturnType<typeof setTimeout> | null = null
-
-  const flushWaiting = (kind: WheelKind) => {
-    if (waitTimer !== null) clearTimeout(waitTimer)
-    waitTimer = null
-    const w = waiting
-    waiting = null
-    if (w) applyWheel(w.sample, kind, w.x, w.y)
-  }
-
   const onWheel = (e: WheelEvent) => {
+    const sample = normalizeWheel(e)
+    const intent = wheelIntent(sample, wheelBehavior, RATES)
+    if (intent.type === 'page') {
+      // Left to the page: no preventDefault, so it scrolls as if the diagram were not there.
+      options.onPageWheel?.()
+      return
+    }
     e.preventDefault()
     // Safari 17+ may send a pinch both as gesture events and as ctrl-wheel; take one.
     if (pinching) return
-    const sample = normalizeWheel(e)
-    const { kind, state } = classify(sample, classifier)
-    classifier = state
-    if (kind === undefined) {
-      // Only a guessed plain wheel and a Ctrl / ⌘ zoom depend on the device; the rest goes now.
-      const depends = sample.ctrl || (wheelBehavior === 'auto' && sample.dy !== 0)
-      if (!depends) {
-        applyWheel(sample, 'trackpad', e.clientX, e.clientY)
-        return
-      }
-      flushWaiting('wheel')
-      waiting = { sample, x: e.clientX, y: e.clientY }
-      waitTimer = setTimeout(() => {
-        classifier = settle(classifier)
-        flushWaiting('wheel')
-      }, SETTLE_WAIT)
-      return
-    }
-    flushWaiting(kind)
-    applyWheel(sample, kind, e.clientX, e.clientY)
-  }
-
-  const applyWheel = (sample: WheelSample, kind: WheelKind, clientX: number, clientY: number) => {
-    const intent = wheelIntent(sample, kind, wheelBehavior, RATES)
     if (intent.type === 'pan') {
       panX -= intent.dx
       panY -= intent.dy
       moved()
       return
     }
-    const [ax, ay] = local(clientX, clientY)
+    const [ax, ay] = local(e.clientX, e.clientY)
     if (intent.smooth) {
       easeZoom(intent.dln, ax, ay)
     } else {
@@ -714,8 +679,6 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       raf = null
       if (settleTimer !== null) clearTimeout(settleTimer)
       settleTimer = null
-      if (waitTimer !== null) clearTimeout(waitTimer)
-      waitTimer = null
       listeners.abort()
       motions.clear()
       viewBoxObserver.disconnect()

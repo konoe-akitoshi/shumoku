@@ -25,6 +25,15 @@ drag は MapLibre / use-gesture / d3-drag に合わせ、release が失われた
 （tldraw・Excalidraw も同じ設定を持つ）。SpaceMouse のボタンは機種ごとの表（Pro 系と 2 ボタン機）で読む。
 §4 の本文は当時の設計で、今の実装とは違う。
 
+見直し 2（2026-11-19）: MapLibre の規則でも、Linux（X11）の Chrome の 2 本指ドラッグが時々ズームになった。
+MapLibre は判定を zoom の速さにしか使わないので外れても困らないが、こちらは外れると操作そのものが入れ替わる。
+調べた結果（4 方向の調査）、ブラウザでは確実な判定はできず（X11 の Chrome と古い Windows の touchpad では
+ブラウザも知らない。標準化は `WheelEvent.momentum` だけで機器は分からない）、自動判定を出した Miro・Lucid・
+draw.io はどれも誤判定の苦情を抱えている。そこで判定をやめた: 素のホイールは `wheelBehavior`（既定 pan。
+Figma・tldraw・Excalidraw・Visio・draw.io と同じ）、Ctrl/⌘＋ホイールとピンチは常に zoom、設定は Scroll / Zoom。
+dashboard の widget は `cooperative`（Grafana の Node Graph・Google Maps の埋め込みと同じ）で、素のホイールは
+ページへ渡して「Ctrl + scroll to zoom」を出す。
+
 ---
 
 ## 1. 問題と調査の要約

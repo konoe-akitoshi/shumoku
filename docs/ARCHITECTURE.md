@@ -384,14 +384,14 @@ The renderer always emits a `<g class="viewport">` as its zoom target;
 `attachCamera` throws if that element isn't present. Apps that want
 **no** camera simply don't call `attachCamera`.
 
-### UX policy (Figma / Miro style)
+### UX policy (Figma / tldraw / Visio style)
 
 | Input | Result |
 |---|---|
-| Mouse wheel (plain) | zoom at cursor |
-| Mouse ctrl+wheel | zoom at cursor (explicit) |
-| Trackpad two-finger | pan (with natural momentum) |
+| Wheel or trackpad two-finger (plain) | pan (`wheelBehavior: 'zoom'` makes a plain wheel zoom) |
+| Ctrl/⌘ + wheel | zoom at cursor |
 | Trackpad pinch | zoom at cursor (browser synthesises `ctrlKey=true`) |
+| Plain wheel in a dashboard widget | scrolls the page; the diagram says "Ctrl + scroll to zoom" |
 | Middle-click drag / Alt+left-drag / Space+left-drag | pan |
 | Node / group drag (edit mode) | reported as a drop; becomes order hints (handled in `ShumokuRenderer`) |
 
@@ -406,11 +406,11 @@ A small core of its own (no d3-zoom, no wheel-gestures); the design is in
   view stays fitted).
 - **One writer**: inputs only queue what they ask for; one animation frame folds it in,
   writes `g.viewport`'s `transform` once, and stops when nothing moves.
-- **Wheel** (`camera-wheel.ts`): a mouse wheel and a trackpad are told apart by MapLibre's
-  rule (a multiple of 4.000244140625 is a wheel, under 4 px a trackpad, else the first event
-  after a 400 ms pause waits 40 ms: alone it is a wheel, followed it is a trackpad when
-  `|dt · d| < 200`). Alt + wheel does the other thing; `wheelBehavior` (a setting in both apps)
-  fixes it.
+- **Wheel** (`camera-wheel.ts`): no device is guessed (browsers cannot tell a mouse from a
+  trackpad, and on X11 Chrome or legacy Windows touchpads they do not know either). A plain
+  wheel does what `wheelBehavior` says: `pan` (default, as Figma / tldraw / Visio / draw.io),
+  `zoom`, or `cooperative` (left to the page, for a dashboard widget, with a "Ctrl + scroll to
+  zoom" hint). Ctrl/⌘ + wheel and pinch always zoom; Alt + wheel swaps scroll and zoom.
 - **Continuous inputs** (a SpaceMouse) add a velocity with `addMotion`.
 
 ### Consumer summary
