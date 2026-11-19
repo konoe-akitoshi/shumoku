@@ -1,5 +1,26 @@
 # shumoku-plugin-grafana
 
+## 0.2.33
+
+### Patch Changes
+
+- e0f3f23: Alerts: a failed fetch from Alertmanager now throws instead of returning no alerts, so a monitoring system that cannot be reached no longer reads as one with nothing wrong.
+- Updated dependencies [e0f3f23]
+- Updated dependencies [570c86e]
+- Updated dependencies [60d6f2f]
+- Updated dependencies [d5f9beb]
+- Updated dependencies [64a17e6]
+- Updated dependencies [2399f57]
+- Updated dependencies [67b9c38]
+- Updated dependencies [eb1f58e]
+- Updated dependencies [b262fe4]
+- Updated dependencies [fea9b1c]
+- Updated dependencies [bcefedd]
+- Updated dependencies [317dd26]
+- Updated dependencies [e5d6270]
+- Updated dependencies [475ba09]
+  - @shumoku/core@0.7.0
+
 ## 0.2.32
 
 ### Patch Changes

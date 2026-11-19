@@ -1,7 +1,0 @@
----
-"@shumoku/core": patch
-"@shumoku/renderer": patch
-"@shumoku/renderer-svg": patch
----
-
-A group's look follows from the group, not from colours written on it. Each group takes one of the hues of the theme's new `groupTone`, picked by its id (`groupHueOf`), so a group of the same id is the same colour in every drawing and theme, a step further from the background with each depth: the drawing states each group's depth in the scene (`Scene.groups[].depth`), and `groupColors(tone, depth, hue)` gives the fill, edge and heading. Every hue at every depth, in light and dark, keeps the heading at 4.5:1 and the wires, card edges and ports at 3:1, stays fainter than a card's edge, and lies within 1.2:1 of the background, so the status and metric colours drawn on a group keep at least 83% of their contrast; six hues in either theme (`groupHues`, `groupHueCapacity`). `ThemeColors.groupSurfaces` (replacing `surfaces` and `SurfaceToken`) are the neutral surfaces by depth, for the page around a drawing. `SubgraphStyle` keeps only `padding`: a group's fill, stroke, dash and label placement are no longer read, and an older store's are accepted and dropped. The renderer's `groupLook` takes the depth and `KitColors.groupTone` replaces `group`. Core exports `colorDistance` and `OK_JND`. The light theme's line tone follows the new surfaces (lightness 0.61), and the line tone is held to every group fill.

@@ -1,5 +1,50 @@
 # @shumoku/renderer-svg
 
+## 0.3.2
+
+### Patch Changes
+
+- d5f9beb: Device attributes are configuration. A node's `address`, `sysName`, `chassisId` and `mac` and a
+  port's `mac` are fields of the network YAML (`inputModel.Node` / `Port`); `resolveNetwork` matches
+  nodes on them (and on a node's segment addresses) plus each source's own `vendorIds`, which stay in
+  the source's observation with a port's `ifIndex`. The `identity` field is gone from the observation
+  record, and the drawn graph (`Node`, `NodePort`, `Link`, `Subgraph`, `NetworkGraph`) carries no
+  `identity`, `provenance`, `entityId`, `attachments`, `metadata` or `exclusions`: `toNetworkGraph(model)`
+  takes no observation and `fromNetworkGraph(graph)` returns a `NetworkModel`. The graph-shaped
+  `resolve()` / `SnapshotEntry` / `ResolvedGraph`, `graphToSource`, `stampObserved` and
+  `deriveMappingFromGraph` are removed; `deriveMapping(graph, observation)`,
+  `effectivePolicyForNode(graph, observation, node)`, `nodeIdentityKeys(DeviceKeys)`,
+  `portIdentityKeys(PortKeys)`, `deviceKeysOfIdentity`, `segmentAddressesOf`, `deviceAttributes` and
+  `vendorIdsOf` replace them. `validateTopologyIdentityContract` reports `portsMissingName` instead of
+  `portsMissingIfName`. Topology plugins write the attributes on the nodes and ports they return.
+- 67b9c38: A group's look follows from the group, not from colours written on it. Each group takes one of the hues of the theme's new `groupTone`, picked by its id (`groupHueOf`), so a group of the same id is the same colour in every drawing and theme, a step further from the background with each depth: the drawing states each group's depth in the scene (`Scene.groups[].depth`), and `groupColors(tone, depth, hue)` gives the fill, edge and heading. Every hue at every depth, in light and dark, keeps the heading at 4.5:1 and the wires, card edges and ports at 3:1, stays fainter than a card's edge, and lies within 1.2:1 of the background, so the status and metric colours drawn on a group keep at least 83% of their contrast; six hues in either theme (`groupHues`, `groupHueCapacity`). `ThemeColors.groupSurfaces` (replacing `surfaces` and `SurfaceToken`) are the neutral surfaces by depth, for the page around a drawing. `SubgraphStyle` keeps only `padding`: a group's fill, stroke, dash and label placement are no longer read, and an older store's are accepted and dropped. The renderer's `groupLook` takes the depth and `KitColors.groupTone` replaces `group`. Core exports `colorDistance` and `OK_JND`. The light theme's line tone follows the new surfaces (lightness 0.61), and the line tone is held to every group fill.
+- fea9b1c: `NetworkModel` is now two things: `config` (the network in the YAML's shape) and `drawing` (looks and order). The design layer is gone: a node's ports (`ports[]`, each with `name`, `label`, `interfaceName`, `aliases`, `role`, `faceplateLabel`, `speed`, `connectors`, `poe`, `source`, `notes`), its `productId`, `platform`, `service` and `resource`, a link end's `plug` (cage and module), a link's `cable` (`type` and `productId`, or the type written bare) and `via`, and the network's `terminations` are configuration, written in the YAML and merged like every other field. The observation record (identity, provenance, attachments, exclusions) is no longer part of the model: `resolveNetwork(project: SourceNetwork, snapshots)` returns `{ model, observation }`, `toNetworkGraph(model, observation?)` joins it into the graph when given, `fromNetworkGraph(graph)` returns `{ model, observation? }`, and `graphToSource(graph)` is the inverse of `sourceToGraph`. `SourceNetwork` lost its `design` layer: a plugin writes a node's ports on the node. Coordinates never ride in the network: node `position` / `size`, group `bounds`, link `bends`, `Termination.position` and port `placement` are removed from the graph types, as are `fieldSources`, group `membership` and `direction`, and a port's `disabled`. `Termination.metadata` became `autoFor`.
+- Updated dependencies [e0f3f23]
+- Updated dependencies [570c86e]
+- Updated dependencies [76f057e]
+- Updated dependencies [1e44236]
+- Updated dependencies [33aee2f]
+- Updated dependencies [e909d25]
+- Updated dependencies [24ea510]
+- Updated dependencies [60d6f2f]
+- Updated dependencies [d5f9beb]
+- Updated dependencies [64a17e6]
+- Updated dependencies [2399f57]
+- Updated dependencies [67b9c38]
+- Updated dependencies [eb1f58e]
+- Updated dependencies [b262fe4]
+- Updated dependencies [fea9b1c]
+- Updated dependencies [2db8b4e]
+- Updated dependencies [bcefedd]
+- Updated dependencies [3967c02]
+- Updated dependencies [317dd26]
+- Updated dependencies [e5d6270]
+- Updated dependencies [475ba09]
+- Updated dependencies [b7f7d80]
+- Updated dependencies [dc4b266]
+  - @shumoku/core@0.7.0
+  - @shumoku/renderer@0.4.0
+
 ## 0.3.1
 
 ### Patch Changes
