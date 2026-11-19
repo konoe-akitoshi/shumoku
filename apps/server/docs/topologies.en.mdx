@@ -61,6 +61,22 @@ There is nowhere to write coordinates or which way is up. Up and down come from 
 - **Settings** > **Display** keeps one switch, **Hide Disconnected Nodes**, which hides every node with no links after the sources are merged, with no exemption. Only the Server applies it. The edge style and spline settings are gone.
 - Moving the diagram: a wheel and a trackpad's two fingers scroll (pan) the diagram, and a pinch or Ctrl/⌘ + wheel zooms at the cursor; Shift + wheel scrolls sideways, and Alt + wheel swaps scrolling and zooming. Whether the input is a mouse or a trackpad is not guessed (browsers cannot reliably tell). **Settings** > **Display** > **Mouse Wheel** set to **Zoom** makes a plain wheel zoom. It is saved per browser and applies to the detail and shared pages. On a dashboard a plain wheel scrolls the page (the diagram shows "Ctrl + scroll to zoom"); zoom with Ctrl/⌘ + wheel or a pinch. A middle, Alt + left or Space + left drag pans, and on the detail and shared pages a plain left drag does too (under 4 px it is a click). When the diagram is redrawn in the background, the view stays where it was.
 
+### SpaceMouse
+
+A 3Dconnexion SpaceMouse pans and zooms the diagram alongside the mouse (detail page, dashboards, shared pages). Push the cap sideways to pan, pull it up or press it down to zoom (about the cursor, or the centre when the cursor is off the diagram); Fit fits, and Shift, held, slows it down. On a dashboard the diagram under the cursor moves.
+
+- Needs: Chrome or Edge (WebHID), and **the page opened over HTTPS** (or on localhost). Over plain HTTP the browser turns WebHID off, so it cannot work (the button at the bottom right says so). To serve the Server over HTTPS, see "Reverse Proxy & HTTPS" in [Installation](./installation.en.mdx).
+- Connecting: press the joystick button at the bottom right of the detail or shared page and pick the device. Later visits connect on their own. A model without a serial number (the SpaceExplorer, for one) loses the browser's permission when unplugged: after plugging it back in, pick it with the button again.
+- Linux: reading the device needs access to its hidraw node. Put this udev rule in place and apply it with `sudo udevadm control --reload && sudo udevadm trigger`; spacenavd can keep running.
+```text
+# /etc/udev/rules.d/70-spacemouse.rules
+KERNEL=="hidraw*", ATTRS{idVendor}=="256f", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c603|c605|c606|c621|c623|c625|c626|c627|c628|c629|c62b", TAG+="uaccess"
+```
+- Windows / macOS: while 3Dconnexion's driver (3DxWare) holds the device, input may not arrive.
+- Buttons work on the SpaceMouse Pro family, the SpaceExplorer and the two-button models (SpaceNavigator, Compact, ...); other models move with the cap only.
+- Axis directions and speed are set per browser (in the developer console): `localStorage['shumoku.spacemouse.invert'] = 'x,y,z'` (the axes to flip), `localStorage['shumoku.spacemouse.speed'] = '1.5'` (a speed factor). Reload to apply.
+
 ## Linking Data Sources
 
 In the topology **Settings** tab:

@@ -78,6 +78,8 @@ export interface Camera {
    * the view. Call `wake()` when its values change (the camera sleeps when nothing moves).
    */
   addMotion(sample: () => Motion | null): MotionHandle
+  /** Whether the pointer is over the diagram (which of several a 3D mouse should drive). */
+  isPointerOver(): boolean
   /** Fit the whole drawing, and keep it fitted as the drawing or the container change. */
   reset(): void
   /** Detach all listeners. Safe to call multiple times. */
@@ -662,6 +664,10 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
           motions.delete(sample)
         },
       }
+    },
+
+    isPointerOver() {
+      return pointerOver
     },
 
     reset() {

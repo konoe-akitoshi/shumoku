@@ -15,6 +15,7 @@
   import type { NetworkGraph, Theme } from '@shumoku/core'
   import {
     attachCamera,
+    attachSpaceMouse,
     type Camera,
     type CameraOptions,
     type RendererOverlaySnippets,
@@ -168,7 +169,10 @@
     }
     const c = attachCamera(svgElement, { ...cameraOptions, onPageWheel: showZoomHint })
     camera = c
+    // A connected SpaceMouse drives the diagram the pointer is over (a dashboard has several).
+    const detachSpaceMouse = attachSpaceMouse(c)
     return () => {
+      detachSpaceMouse()
       c.detach()
       camera = null
     }

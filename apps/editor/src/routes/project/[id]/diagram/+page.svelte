@@ -6,7 +6,13 @@
     newId,
     type Subgraph,
   } from '@shumoku/core'
-  import { attachCamera, type Box, type Camera, layoutNetwork } from '@shumoku/renderer'
+  import {
+    attachCamera,
+    attachSpaceMouse,
+    type Box,
+    type Camera,
+    layoutNetwork,
+  } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderNetworkSvg } from '@shumoku/renderer-svg'
   import { untrack } from 'svelte'
@@ -51,6 +57,7 @@
     if (!rendererSvg) return
     const c = attachCamera(rendererSvg, { leftDrag: untrack(leftDrag) })
     camera = c
+    const detachSpaceMouse = attachSpaceMouse(c)
     cameraHandle = {
       // `reset()` returns to the SVG viewBox (= layout bounds), which
       // is exactly "fit everything" since the renderer sizes the
@@ -61,6 +68,7 @@
       reset: () => c.reset(),
     }
     return () => {
+      detachSpaceMouse()
       c.detach()
       camera = null
       cameraHandle = null

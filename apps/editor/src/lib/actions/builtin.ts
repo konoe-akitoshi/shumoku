@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { newId } from '@shumoku/core'
+import { connectSpaceMouse, spaceMouseOffer } from '@shumoku/renderer'
 import {
   ArrowsClockwise,
   ArrowUUpLeft,
@@ -221,6 +222,16 @@ const builtinActions: Action[] = [
     group: 'view',
     enabled: (ctx) => !!ctx.camera,
     run: (ctx) => ctx.camera?.zoomOut(),
+  },
+  {
+    id: 'view.connectSpaceMouse',
+    label: 'Connect SpaceMouse',
+    group: 'view',
+    enabled: () => spaceMouseOffer() !== 'none',
+    run: async () => {
+      const problem = await connectSpaceMouse()
+      if (problem) window.alert(problem)
+    },
   },
   {
     id: 'view.resetZoom',

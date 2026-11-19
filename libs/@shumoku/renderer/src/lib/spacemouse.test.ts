@@ -1,0 +1,151 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
+import { describe, expect, it } from 'vitest'
+import {
+  axisResponse,
+  defaultSpaceMouseSettings,
+  isDown,
+  isSpaceMouse,
+  motionOf,
+  parseReport,
+  SPACEEXPLORER_BUTTONS,
+  SPACEMOUSE_PRO_BUTTONS,
+  SPACEMOUSE_TWO_BUTTONS,
+  spaceMouseButtons,
+  zeroState,
+} from './spacemouse.js'
+
+const view = (...values: number[]) => {
+  const buf = new ArrayBuffer(values.length * 2)
+  const dv = new DataView(buf)
+  for (const [i, v] of values.entries()) dv.setInt16(i * 2, v, true)
+  return dv
+}
+const bytes = (...values: number[]) => new DataView(new Uint8Array(values).buffer)
+
+describe('parseReport', () => {
+  it('reads the translation (report 1)', () => {
+    const s = parseReport(1, view(120, -40, 350), zeroState())
+    expect([s.tx, s.ty, s.tz]).toEqual([120, -40, 350])
+  })
+
+  it('reads a rotation sent in the same report', () => {
+    const s = parseReport(1, view(1, 2, 3, 4, 5, 6), zeroState())
+    expect([s.rx, s.ry, s.rz]).toEqual([4, 5, 6])
+  })
+
+  it('reads the rotation (report 2) and keeps the translation', () => {
+    const s = parseReport(2, view(7, 8, 9), { ...zeroState(), tx: 5 })
+    expect([s.tx, s.rx, s.ry, s.rz]).toEqual([5, 7, 8, 9])
+  })
+
+  it('reads the buttons (report 3), little-endian across bytes', () => {
+    // Fit (bit 1) and Shift (bit 24)
+    const s = parseReport(3, bytes(0b10, 0, 0, 0b1), zeroState())
+    expect(isDown(s.buttons, SPACEMOUSE_PRO_BUTTONS, 'fit')).toBe(true)
+    expect(isDown(s.buttons, SPACEMOUSE_PRO_BUTTONS, 'shift')).toBe(true)
+    expect(isDown(s.buttons, SPACEMOUSE_PRO_BUTTONS, 'menu')).toBe(false)
+  })
+
+  it('leaves the state alone for other reports', () => {
+    const s = zeroState()
+    expect(parseReport(4, bytes(1), s)).toBe(s)
+  })
+})
+
+describe('axisResponse', () => {
+  it('is zero inside the deadzone', () => {
+    expect(axisResponse(10)).toBe(0)
+    expect(axisResponse(-10)).toBe(0)
+  })
+
+  it('reaches ±1 at full deflection and clamps beyond', () => {
+    expect(axisResponse(350)).toBeCloseTo(1)
+    expect(axisResponse(-1400)).toBeCloseTo(-1)
+  })
+
+  it('is gentle near rest and quick when pushed', () => {
+    const half = axisResponse(175)
+    expect(half).toBeGreaterThan(0.25)
+    expect(half).toBeLessThan(0.5)
+  })
+})
+
+describe('motionOf', () => {
+  const settings = defaultSpaceMouseSettings()
+  const full = motionOf({ ...zeroState(), tx: 350 }, settings)?.vx ?? 0
+
+  it('is nothing at rest', () => {
+    expect(motionOf(zeroState(), settings)).toBeNull()
+  })
+
+  it('pans with the cap pushed sideways', () => {
+    const m = motionOf({ ...zeroState(), tx: 350 }, settings)
+    expect(m?.vx).toBeGreaterThan(0)
+    expect(m?.vz).toBe(0)
+  })
+
+  it('zooms in with the cap pulled up', () => {
+    expect(motionOf({ ...zeroState(), tz: -350 }, settings)?.vz).toBeGreaterThan(0)
+  })
+
+  it('passes only the stronger of pan and zoom', () => {
+    const m = motionOf({ ...zeroState(), tx: 60, tz: -300 }, settings)
+    expect(m?.vx).toBe(0)
+    expect(m?.vz).toBeGreaterThan(0)
+  })
+
+  it('inverts an axis on request', () => {
+    const m = motionOf({ ...zeroState(), ty: 350 }, { ...settings, invertY: true })
+    expect(m?.vy).toBeCloseTo(-full)
+  })
+
+  it('scales with the speed and slows down when precise', () => {
+    expect(motionOf({ ...zeroState(), tx: 350 }, { ...settings, speed: 2 })?.vx).toBeCloseTo(
+      full * 2,
+    )
+    expect(motionOf({ ...zeroState(), tx: 350 }, settings, true)?.vx).toBeCloseTo(full * 0.3)
+  })
+})
+
+describe('spaceMouseButtons', () => {
+  it('names the Pro buttons, by either vendor id', () => {
+    expect(spaceMouseButtons(0x046d, 0xc62b)).toBe(SPACEMOUSE_PRO_BUTTONS)
+    expect(spaceMouseButtons(0x256f, 0xc632)).toBe(SPACEMOUSE_PRO_BUTTONS)
+  })
+
+  it('names the SpaceExplorer buttons', () => {
+    expect(spaceMouseButtons(0x046d, 0xc627)).toBe(SPACEEXPLORER_BUTTONS)
+    expect(isDown(1 << 10, SPACEEXPLORER_BUTTONS, 'fit')).toBe(true)
+  })
+
+  it('names the two buttons of a Compact', () => {
+    expect(spaceMouseButtons(0x256f, 0xc635)).toBe(SPACEMOUSE_TWO_BUTTONS)
+  })
+
+  it('gives an unknown model no buttons', () => {
+    const map = spaceMouseButtons(0x256f, 0xc633)
+    expect(isDown(0xffffffff, map, 'fit')).toBe(false)
+  })
+
+  it('reads a named button through the map', () => {
+    expect(isDown(1 << 24, SPACEMOUSE_PRO_BUTTONS, 'shift')).toBe(true)
+    expect(isDown(1 << 24, SPACEMOUSE_TWO_BUTTONS, 'shift')).toBe(false)
+  })
+})
+
+describe('isSpaceMouse', () => {
+  const axes = [{ usagePage: 0x01, usage: 0x08 }]
+  it('takes the multi-axis interface of a 3Dconnexion device', () => {
+    expect(isSpaceMouse({ vendorId: 0x046d, collections: axes })).toBe(true)
+    expect(isSpaceMouse({ vendorId: 0x256f, collections: axes })).toBe(true)
+  })
+  it('leaves other interfaces and other Logitech devices alone', () => {
+    expect(
+      isSpaceMouse({ vendorId: 0x046d, collections: [{ usagePage: 0x01, usage: 0x02 }] }),
+    ).toBe(false)
+    expect(isSpaceMouse({ vendorId: 0x1234, collections: axes })).toBe(false)
+  })
+})

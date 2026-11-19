@@ -16,6 +16,12 @@ Diagram は `ShumokuRenderer` による論理トポロジー編集画面。平�
 - Space＋ドラッグ、中ボタンドラッグ、Alt＋左ドラッグでパンできる。View モードでは左ドラッグでもパンする
   （Edit モードの左ドラッグは範囲選択と要素の移動）。
 - 編集して図が描き直されても、見ている場所は動かない。
+- SpaceMouse（Chrome / Edge、WebHID）はマウスと併用するカメラ。コマンドパレットの **Connect SpaceMouse** で
+  一度つなぐと、次からは自動でつながる。キャップを横に押すとパン、引き上げる / 押し込むとズーム（ズームの中心は
+  カーソル、図の外なら画面の中心）、Fit ボタンで全体表示、Shift ボタンを押している間はゆっくり動く
+  （ボタンは SpaceMouse Pro 系・SpaceExplorer・2 ボタンの機種に対応。他の機種はキャップだけ）。HTTPS か localhost で開く必要がある。
+  3DxWare が動いていると入力が届かない（終了する）。Linux では hidraw の udev rule が要る（spacenavd と併用できる。ルールはサーバーの Topologies のドキュメントと同じ）。
+  軸の向きは `localStorage['shumoku.spacemouse.invert'] = 'x,y,z'` で反転できる（実機での確認待ち）。
 - **Export → JSON / SVG / Print** で図を出力する。プロジェクト全体の保存は
   [Settings の Export](./projects.md) を使う。
 
