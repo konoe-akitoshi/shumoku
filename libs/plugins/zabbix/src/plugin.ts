@@ -662,6 +662,12 @@ export class ZabbixPlugin
   // AlertsCapable Implementation
   // ============================================
 
+  /**
+   * Every problem still open, however long ago it started, and with `activeOnly` off also the
+   * problems that started within `timeRange` and have since resolved. The time window must not
+   * apply to the open ones: a problem that started two hours ago and is still down is the one a
+   * dashboard most needs to keep showing.
+   */
   async getAlerts(options?: AlertQueryOptions): Promise<Alert[]> {
     // Zabbix severity mapping (Zabbix uses 0-5, we need to filter and map)
     const severityFilter = this.getSeverityFilter(options?.minSeverity)
@@ -684,44 +690,48 @@ export class ZabbixPlugin
       hosts?: Array<{ hostid: string; host: string; name: string }>
     }
 
-    // Use event.get rather than problem.get: event.get has been stable across
-    // Zabbix 3.x–7.x and continues to accept selectHosts, while problem.get
-    // dropped selectHosts in 7.0 and tightened sortfield to 'eventid' only.
-    const params: Record<string, unknown> = {
-      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'value', 'r_eventid'],
-      selectHosts: ['hostid', 'host', 'name'],
+    const scope: Record<string, unknown> = {
       source: 0, // EVENT_SOURCE_TRIGGERS
       object: 0, // EVENT_OBJECT_TRIGGER
-      time_from: timeFrom,
-      sortfield: ['clock'],
-      sortorder: 'DESC',
+    }
+    if (severityFilter.length > 0) scope['severities'] = severityFilter
+    if (options?.hostIds && options.hostIds.length > 0) scope['hostids'] = options.hostIds
+
+    // The events are read with event.get rather than problem.get: event.get has been stable across
+    // Zabbix 3.x–7.x and continues to accept selectHosts, while problem.get dropped selectHosts in
+    // 7.0. problem.get only says which problems are open (`recent: false`: not the recently
+    // resolved ones), by event id.
+    const eventFields = {
+      output: ['eventid', 'objectid', 'name', 'severity', 'clock', 'value', 'r_eventid'],
+      selectHosts: ['hostid', 'host', 'name'],
+    }
+    const open = await this.apiRequest<{ eventid: string }[]>('problem.get', {
+      ...scope,
+      output: ['eventid'],
+      recent: false,
+    })
+    const openIds = new Set(open.map((p) => p.eventid))
+    const events =
+      openIds.size > 0
+        ? await this.apiRequest<ZabbixEvent[]>('event.get', {
+            ...eventFields,
+            eventids: [...openIds],
+          })
+        : []
+
+    if (!options?.activeOnly) {
+      // The problems that started within the window, open or since resolved; only problem events
+      // (value=1), so a resolved problem shows once and its recovery event does not show beside it.
+      const recent = await this.apiRequest<ZabbixEvent[]>('event.get', {
+        ...scope,
+        ...eventFields,
+        time_from: timeFrom,
+        filter: { value: 1 },
+      })
+      for (const e of recent) if (!openIds.has(e.eventid)) events.push(e)
     }
 
-    // Filter by severity
-    if (severityFilter.length > 0) {
-      params['severities'] = severityFilter
-    }
-
-    // Filter by host IDs
-    if (options?.hostIds && options.hostIds.length > 0) {
-      params['hostids'] = options.hostIds
-    }
-
-    // Active-only: keep only problem events (value=1). event.get filters values
-    // via `filter`, not a top-level `value` param. Note this alone is not enough
-    // — a problem that has since recovered still carries its original value=1
-    // event, so we additionally drop recovered ones by r_eventid below.
-    if (options?.activeOnly) {
-      params['filter'] = { value: 1 }
-    }
-
-    const events = await this.apiRequest<ZabbixEvent[]>('event.get', params)
-
-    // A value=1 event whose r_eventid is set has already been closed by a
-    // recovery event — exclude those when the caller wants active alerts only.
-    const visible = options?.activeOnly
-      ? events.filter((e) => !e.r_eventid || e.r_eventid === '0')
-      : events
+    const visible = events.sort((a, b) => Number(b.clock) - Number(a.clock))
 
     return visible.map((e) => ({
       id: e.eventid,
