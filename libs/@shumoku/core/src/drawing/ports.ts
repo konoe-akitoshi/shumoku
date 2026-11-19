@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { haloOf } from './ground.js'
+import type { PortKey } from './keys.js'
 import type { Box, Point, PortSideLayout } from './metrics.js'
-import { boxKey, type End, type Geometry, lineEnd, type Problem } from './problem.js'
+import { boxKey, type End, type Geometry, lineEnd, linesById, type Problem } from './problem.js'
 import type { Side } from './scene.js'
 
 export const centre = (b: Box): Point => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 })
@@ -71,28 +73,62 @@ export function widen(
   return { ...problem, items }
 }
 
+/**
+ * The room the ports along one edge take for their lines, in order along the edge: the white kept
+ * between two lines (`apart`) and the ground of each port's line (`halos`, the widest line ending
+ * there; see `haloOf`). Two neighbouring ports stand as far apart as their own two lines ask, the
+ * same as two lines running side by side (`pitchOf`), so a wide line widens the room of its own
+ * port and no other: a 100G uplink on one edge of a switch spaces neither the 1G ports beside it
+ * nor those on its other edges.
+ */
+export interface PortRoom {
+  readonly apart: number
+  readonly halos: readonly number[]
+}
+
+/** The room of the ports `list` names, by the widest line that ends at each. */
+export function portRoom(
+  problem: Pick<Problem, 'lines' | 'metrics'>,
+  ends: (port: PortKey) => readonly { line: string }[],
+  list: readonly PortKey[],
+): PortRoom {
+  const byLine = linesById(problem)
+  const halos = list.map((id) =>
+    Math.max(
+      0,
+      ...ends(id).map((e) => {
+        const line = byLine.get(e.line)
+        return line ? haloOf(line) : 0
+      }),
+    ),
+  )
+  return { apart: problem.metrics.gapApart, halos }
+}
+
 /** The least distance between the first and the last port's centre and the ends of their edge. */
-export function marginsOf(layout: PortSideLayout | undefined, slot: number) {
+export function marginsOf(layout: PortSideLayout | undefined, room: PortRoom) {
+  const end = (halo: number | undefined) => room.apart / 2 + (halo ?? 0)
   return {
-    lead: Math.max(layout?.leadMargin ?? 0, slot / 2),
-    trail: Math.max(layout?.trailMargin ?? 0, slot / 2),
+    lead: Math.max(layout?.leadMargin ?? 0, end(room.halos[0])),
+    trail: Math.max(layout?.trailMargin ?? 0, end(room.halos[room.halos.length - 1])),
   }
 }
 
 /**
- * The least centre-to-centre distance for each pair of ports on an edge that has `n`, as
- * `(from, to, d)`: every neighbouring pair keeps at least the room of its line (`slot`), and a
- * pair the layout names keeps what it asks.
+ * The least centre-to-centre distance for each pair of ports on an edge, as `(from, to, d)`:
+ * every neighbouring pair keeps at least the room of its two lines, and a pair the layout names
+ * keeps what it asks.
  */
 export function gapsOf(
   layout: PortSideLayout | undefined,
-  slot: number,
-  n: number,
+  room: PortRoom,
 ): { from: number; to: number; d: number }[] {
+  const n = room.halos.length
   const out: { from: number; to: number; d: number }[] = []
-  for (let from = 0; from + 1 < n; from++) {
+  for (const [from, halo] of room.halos.slice(0, -1).entries()) {
     const min = layout?.gaps.find((g) => g.from === from && g.to === from + 1)?.min ?? 0
-    out.push({ from, to: from + 1, d: Math.max(slot, min) })
+    const lines = room.apart + halo + (room.halos[from + 1] ?? 0)
+    out.push({ from, to: from + 1, d: Math.max(lines, min) })
   }
   for (const g of layout?.gaps ?? []) {
     if (g.to - g.from === 2 && g.to < n) out.push({ from: g.from, to: g.to, d: g.min })
@@ -101,16 +137,16 @@ export function gapsOf(
 }
 
 /**
- * How long an edge must be to hold its `n` ports: each neighbouring gap between them, and at
- * each end twice the least margin. The ports are held only the margin from the ends; the other
- * margin is play, which lets a port stand level with the port it is joined to on a neighbour.
+ * How long an edge must be to hold its ports: each neighbouring gap between them, and at each end
+ * twice the least margin. The ports are held only the margin from the ends; the other margin is
+ * play, which lets a port stand level with the port it is joined to on a neighbour.
  */
-export function extentOf(layout: PortSideLayout | undefined, slot: number, n: number): number {
-  const { lead, trail } = marginsOf(layout, slot)
+export function extentOf(layout: PortSideLayout | undefined, room: PortRoom): number {
+  const { lead, trail } = marginsOf(layout, room)
   return (
     2 * lead +
     2 * trail +
-    gapsOf(layout, slot, n)
+    gapsOf(layout, room)
       .filter((g) => g.to - g.from === 1)
       .reduce((sum, g) => sum + g.d, 0)
   )

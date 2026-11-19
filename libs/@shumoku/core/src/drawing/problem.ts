@@ -8,7 +8,6 @@ import { toNetworkGraph } from '../models/network-model-graph.js'
 import type { Link, Node, Subgraph } from '../models/types.js'
 import { compare, joinKey, sorted } from '../structure/keys.js'
 import type { NodeId, Structure, Vertex } from '../structure/types.js'
-import { slotOf } from './ground.js'
 import { drawnInPlace, hostBox, hostingOf, poolFrameId, poolsByPlace } from './hosting.js'
 import type { SideKey } from './keys.js'
 import type { Box, Insets, Metrics, PortSideLayout, Size } from './metrics.js'
@@ -165,11 +164,6 @@ export interface Problem {
   /** In id order. */
   items: Item[]
   lines: Line[]
-  /**
-   * The room one port's line takes along the edge of each box, by `boxKey`: the widest line that
-   * ends there with the white off its neighbour. Known before any line is routed.
-   */
-  slots: Map<string, number>
   /**
    * How the names of the ports are shown and what room they take, for each edge that has ports.
    * Known once the ports are in order along their edges (`needsOf`), so the problem read from the
@@ -537,7 +531,6 @@ export function readProblem(
     frames,
     items,
     lines,
-    slots: slotsOf(lines, metrics),
     above: kept,
     level: levels,
     satellites: satellites.sort((a, b) => compare(a.item, b.item)),
@@ -645,15 +638,6 @@ export function linesById(problem: Pick<Problem, 'lines'>): ReadonlyMap<string, 
 
 /** The box an end is on: its node, else its item. */
 export const boxKey = (end: End): string => end.node ?? end.item
-
-export function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
-  const at = new Map<string, Line[]>()
-  for (const line of lines) {
-    if (line.role === 'inside') continue
-    for (const end of [line.a, line.b]) at.set(boxKey(end), [...(at.get(boxKey(end)) ?? []), line])
-  }
-  return new Map([...at].map(([box, here]) => [box, slotOf(metrics, here)]))
-}
 
 /**
  * A written value as text that does not depend on the order its fields were written in: the same

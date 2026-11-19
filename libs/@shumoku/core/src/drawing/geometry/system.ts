@@ -5,7 +5,7 @@
 import { type AxisInput, CycleError, midpoint, packEarly, packLate, solveAxis } from '../axis.js'
 import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
 import { must } from '../must.js'
-import { gapsOf, marginsOf } from '../ports.js'
+import { gapsOf, marginsOf, portRoom } from '../ports.js'
 import { type FrameId, ROOT } from '../problem.js'
 import { portalsOf, sealedOf } from '../sides.js'
 import type { Var } from '../tracks.js'
@@ -218,7 +218,7 @@ export function portChain(
     if (horizontal !== (along === 'x')) continue
     // a leaf group's ports keep the places its solving gave them (`framePorts`)
     if (sealed.has(box)) continue
-    const slot = must(plan.problem.slots, box, 'slot of box')
+    const room = portRoom(plan.problem, (id) => plan.tracks.entities.get(id)?.ends ?? [], list)
     const layout = plan.problem.portSides?.get(k)
     const lo = axis.lowRef(box)
     const hi = axis.highRef(box)
@@ -226,9 +226,9 @@ export function portChain(
     const last = list[list.length - 1]
     if (first === undefined || last === undefined) continue
     // a portal is a point: its port stands on it
-    const { lead, trail } = portals.has(box) ? { lead: 0, trail: 0 } : marginsOf(layout, slot)
+    const { lead, trail } = portals.has(box) ? { lead: 0, trail: 0 } : marginsOf(layout, room)
     sep.push(after(lo, axis.at({ kind: 'port', id: first }), lead))
-    for (const g of gapsOf(layout, slot, list.length)) {
+    for (const g of gapsOf(layout, room)) {
       const [a, b] = [list[g.from], list[g.to]]
       if (a !== undefined && b !== undefined)
         sep.push(after(axis.at({ kind: 'port', id: a }), axis.at({ kind: 'port', id: b }), g.d))
