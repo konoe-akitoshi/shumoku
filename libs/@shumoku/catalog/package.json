@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/catalog",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Device and service catalog for shumoku network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
@@ -34,7 +34,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@shumoku/core": "^0.6.0",
+    "@shumoku/core": "^0.7.0",
     "js-yaml": "^4.3.2"
   },
   "devDependencies": {
