@@ -215,8 +215,9 @@ interface StoredLinkMapping {
 // and a line into a box deep in a group drawn on its own no longer moves the whole group.
 // 38: lines are drawn a step and a half wide per decade of speed, not one stroke.
 // 39: lines are drawn two strokes and a half wide per decade of speed, not a stroke and a half.
-// 40: lines are drawn 1G at four strokes and seven and a half more per decade (100G at 19), and a
-// port's marker widens across a line wider than it.
+// 40: lines are drawn 1G at four strokes and seven and a half more per decade (100G at 19), a
+// port's marker widens across a line wider than it, and the ports along an edge are spaced by their
+// own lines, not by the widest line on the box.
 /**
  * Bumped whenever registration would give stored contributions entities they lack, so the startup
  * backfill registers them again (adopt-or-mint is idempotent). 2: a line whose end names no port is
