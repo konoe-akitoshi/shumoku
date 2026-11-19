@@ -67,6 +67,22 @@ links:
 - トポロジーの **Settings** > **Display** では **Hide Disconnected Nodes**（ソースを統合した後にリンクが 1 本もないノードを、例外なく隠す）だけを切り替えられます。この設定を適用するのはサーバーだけです。線の形式（エッジスタイル・スプライン）の設定は廃止されました。
 - 図の移動: ホイールとトラックパッドの二本指操作は図をスクロール（パン）、ピンチと Ctrl/⌘＋ホイールはカーソル位置へズーム、Shift＋ホイールは横スクロール、Alt＋ホイールはスクロールとズームの逆です。マウスかトラックパッドかは推測しません（ブラウザでは確実に区別できないため）。**Settings** > **Display** の **Mouse Wheel** を **Zoom** にすると、素のホイールでズームします。この設定はブラウザごとに保存され、詳細ページと共有ページの図に効きます。ダッシュボードの図では、素のホイールはページのスクロールに使われ（図の上で「Ctrl + scroll to zoom」と表示）、ズームは Ctrl/⌘＋ホイールかピンチです。中ボタン・Alt＋左・Space＋左のドラッグでパンでき、詳細ページと共有ページでは左ドラッグでもパンします（4 px 未満ならクリック）。裏で図が描き直されても、見ている場所はそのままです。
 
+### SpaceMouse
+
+3Dconnexion の SpaceMouse で、マウスと併用して図をパン・ズームできます（詳細ページ・ダッシュボード・共有ページ）。キャップを横に押すとパン、引き上げる / 押し込むとズーム（中心はカーソル、図の外なら画面の中心）、Fit ボタンで全体表示、Shift ボタンを押している間はゆっくり動きます。ダッシュボードでは、カーソルが乗っている図が動きます。
+
+- 必要なもの: Chrome か Edge（WebHID）、**HTTPS で開いたページ**（または localhost）。HTTP で開いていると、ブラウザが WebHID を無効にするので使えません（右下のボタンがそう表示します）。サーバーを HTTPS で公開する方法は[インストール](./installation.ja.mdx)の「リバースプロキシと HTTPS」を参照してください。
+- つなぎ方: 詳細ページか共有ページの右下のジョイスティックのボタンを押し、機器を選びます。次からは自動でつながります。シリアル番号を持たない機種（SpaceExplorer など）は、抜くとブラウザの許可が消えるので、挿し直したらもう一度ボタンで選びます。
+- Linux: 機器を読むには hidraw の権限が要ります。次の udev ルールを置き、`sudo udevadm control --reload && sudo udevadm trigger` で反映します。spacenavd は止めなくて構いません。
+```text
+# /etc/udev/rules.d/70-spacemouse.rules
+KERNEL=="hidraw*", ATTRS{idVendor}=="256f", TAG+="uaccess"
+KERNEL=="hidraw*", ATTRS{idVendor}=="046d", ATTRS{idProduct}=="c603|c605|c606|c621|c623|c625|c626|c627|c628|c629|c62b", TAG+="uaccess"
+```
+- Windows / macOS: 3Dconnexion のドライバ（3DxWare）が機器を押さえていると、入力が届かないことがあります。
+- ボタンは SpaceMouse Pro 系・SpaceExplorer・2 ボタンの機種（SpaceNavigator、Compact など）に対応します。それ以外の機種ではキャップだけが効きます。
+- 軸の向きと速さは、このブラウザで変えられます（開発者ツールのコンソールで）: `localStorage['shumoku.spacemouse.invert'] = 'x,y,z'`（反転したい軸）、`localStorage['shumoku.spacemouse.speed'] = '1.5'`（速さの倍率）。再読み込みで反映されます。
+
 ## データソースの紐付け
 
 トポロジーの **Settings** タブで:

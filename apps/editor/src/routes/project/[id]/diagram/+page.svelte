@@ -6,7 +6,13 @@
     newId,
     type Subgraph,
   } from '@shumoku/core'
-  import { attachCamera, type Box, type Camera, layoutNetwork } from '@shumoku/renderer'
+  import {
+    attachCamera,
+    attachSpaceMouse,
+    type Box,
+    type Camera,
+    layoutNetwork,
+  } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderNetworkSvg } from '@shumoku/renderer-svg'
   import { untrack } from 'svelte'
@@ -23,7 +29,6 @@
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
-  import { attachSpaceMouse } from '$lib/input/spacemouse'
   import { clipboard } from '$lib/state/clipboard.svelte'
   import { detailPanel } from '$lib/state/detail-panel.svelte'
   import { readDrop } from '$lib/state/order-hints'

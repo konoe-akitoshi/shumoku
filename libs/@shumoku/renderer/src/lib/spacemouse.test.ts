@@ -8,6 +8,7 @@ import {
   defaultSpaceMouseSettings,
   isDown,
   isPressed,
+  isSpaceMouse,
   motionOf,
   parseReport,
   SPACEMOUSE_PRO_BUTTONS,
@@ -65,8 +66,9 @@ describe('axisResponse', () => {
     expect(axisResponse(-1400, 0.06)).toBeCloseTo(-1)
   })
 
-  it('is gentle near rest (squared)', () => {
-    expect(axisResponse(175, 0)).toBeCloseTo(0.25)
+  it('follows the curve past the deadzone (gentle near rest)', () => {
+    expect(axisResponse(175, 0, 2)).toBeCloseTo(0.25)
+    expect(axisResponse(175, 0, 1)).toBeCloseTo(0.5)
   })
 })
 
@@ -117,6 +119,10 @@ describe('spaceMouseButtons', () => {
     expect(spaceMouseButtons(0x256f, 0xc632)).toBe(SPACEMOUSE_PRO_BUTTONS)
   })
 
+  it('names the SpaceExplorer buttons', () => {
+    expect(isDown(1 << 10, spaceMouseButtons(0x046d, 0xc627), 'fit')).toBe(true)
+  })
+
   it('names the two buttons of a Compact', () => {
     expect(spaceMouseButtons(0x256f, 0xc635)).toBe(SPACEMOUSE_TWO_BUTTONS)
   })
@@ -129,5 +135,19 @@ describe('spaceMouseButtons', () => {
   it('reads a named button through the map', () => {
     expect(isDown(1 << 24, SPACEMOUSE_PRO_BUTTONS, 'shift')).toBe(true)
     expect(isDown(1 << 24, SPACEMOUSE_TWO_BUTTONS, 'shift')).toBe(false)
+  })
+})
+
+describe('isSpaceMouse', () => {
+  const axes = [{ usagePage: 0x01, usage: 0x08 }]
+  it('takes the multi-axis interface of a 3Dconnexion device', () => {
+    expect(isSpaceMouse({ vendorId: 0x046d, collections: axes })).toBe(true)
+    expect(isSpaceMouse({ vendorId: 0x256f, collections: axes })).toBe(true)
+  })
+  it('leaves other interfaces and other Logitech devices alone', () => {
+    expect(
+      isSpaceMouse({ vendorId: 0x046d, collections: [{ usagePage: 0x01, usage: 0x02 }] }),
+    ).toBe(false)
+    expect(isSpaceMouse({ vendorId: 0x1234, collections: axes })).toBe(false)
   })
 })

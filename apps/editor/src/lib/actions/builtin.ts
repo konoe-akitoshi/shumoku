@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { newId } from '@shumoku/core'
+import { connectSpaceMouse, spaceMouseOffer } from '@shumoku/renderer'
 import {
   ArrowsClockwise,
   ArrowUUpLeft,
@@ -15,7 +16,6 @@ import {
   Trash,
 } from 'phosphor-svelte'
 import { diagramState } from '../context.svelte'
-import { canConnectSpaceMouse, connectSpaceMouse } from '../input/spacemouse'
 import { clipboard } from '../state/clipboard.svelte'
 import { detailPanel } from '../state/detail-panel.svelte'
 import { openPalette } from './palette.svelte'
@@ -227,9 +227,10 @@ const builtinActions: Action[] = [
     id: 'view.connectSpaceMouse',
     label: 'Connect SpaceMouse',
     group: 'view',
-    enabled: () => canConnectSpaceMouse(),
-    run: () => {
-      void connectSpaceMouse()
+    enabled: () => spaceMouseOffer() !== 'none',
+    run: async () => {
+      const problem = await connectSpaceMouse()
+      if (problem) window.alert(problem)
     },
   },
   {

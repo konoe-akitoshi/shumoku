@@ -71,10 +71,18 @@
    * search palette continue to work without refactoring callers.
    */
   import { darkTheme, diagramTitle, lightTheme, type NetworkGraph, type Node } from '@shumoku/core'
-  import type { CameraOptions, Scene } from '@shumoku/renderer'
+  import {
+    type CameraOptions,
+    connectSpaceMouse,
+    onSpaceMouseChange,
+    type Scene,
+    spaceMouseConnected,
+    spaceMouseOffer,
+  } from '@shumoku/renderer'
   import {
     CornersOutIcon,
     GearSixIcon,
+    JoystickIcon,
     MagnifyingGlassIcon,
     MagnifyingGlassMinusIcon,
     MagnifyingGlassPlusIcon,
@@ -163,6 +171,23 @@
   let building = $state(false)
 
   let viewer: ReturnType<typeof TopologyViewer> | undefined = $state()
+  // A SpaceMouse (WebHID) is picked once from a click; afterwards it reconnects by itself. Known
+  // only in the browser, so the button appears after hydration. Over plain HTTP the button stays,
+  // and says that HTTPS is needed.
+  let spaceMouseOffered = $state<'ok' | 'insecure' | 'none'>('none')
+  let spaceMouseOn = $state(false)
+  $effect(() => {
+    spaceMouseOffered = spaceMouseOffer()
+    spaceMouseOn = spaceMouseConnected()
+    return onSpaceMouseChange(() => {
+      spaceMouseOn = spaceMouseConnected()
+    })
+  })
+  async function handleConnectSpaceMouse() {
+    const problem = await connectSpaceMouse()
+    if (problem) alert(problem)
+  }
+
   /** The full-page view: a plain left drag pans, as on a map (a click still selects). */
   const cameraOptions: CameraOptions = { leftDrag: 'pan' }
 
@@ -489,6 +514,19 @@
       <button onclick={() => viewer?.resetZoom()} title="Fit to View">
         <CornersOutIcon size={18} />
       </button>
+      {#if spaceMouseOffered !== 'none'}
+        <button
+          onclick={handleConnectSpaceMouse}
+          title={spaceMouseOn
+            ? 'SpaceMouse connected'
+            : spaceMouseOffered === 'insecure'
+              ? 'SpaceMouse needs HTTPS'
+              : 'Connect SpaceMouse'}
+          class:active={spaceMouseOn}
+        >
+          <JoystickIcon size={18} />
+        </button>
+      {/if}
       {#if onSearchOpen}
         <button onclick={onSearchOpen} title="Search Nodes (Cmd/Ctrl+K)">
           <MagnifyingGlassIcon size={18} />

@@ -42,6 +42,7 @@ export {
   isPressed,
   motionOf,
   openSpaceMouse,
+  SPACEEXPLORER_BUTTONS,
   SPACEMOUSE_PRO_BUTTONS,
   SPACEMOUSE_TWO_BUTTONS,
   type SpaceMouseButtons,
@@ -49,9 +50,18 @@ export {
   type SpaceMouseSettings,
   type SpaceMouseState,
   type SpaceMouseStatus,
+  spaceMouseAvailability,
   spaceMouseButtons,
   spaceMouseSupported,
 } from './lib/spacemouse.js'
+export {
+  attachSpaceMouse,
+  connectSpaceMouse,
+  onSpaceMouseChange,
+  pickCamera,
+  spaceMouseConnected,
+  spaceMouseOffer,
+} from './lib/spacemouse-input.js'
 export {
   offsetPolyline,
   polylineOffsetPath,
