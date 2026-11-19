@@ -1,7 +1,7 @@
 <script lang="ts">
   import { GraphIcon } from 'phosphor-svelte'
   import * as Dialog from '$lib/components/ui/dialog'
-  import type { SubgraphSelectEvent } from './InteractiveSvgDiagram.svelte'
+  import type { SubgraphSelectEvent } from './topology/TopologyView.svelte'
 
   interface Props {
     open: boolean

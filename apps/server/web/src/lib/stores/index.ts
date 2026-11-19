@@ -37,12 +37,3 @@ export {
   topologiesList,
   topologiesLoading,
 } from './topologies'
-
-export {
-  emitHighlightNode,
-  emitSelectNode,
-  emitZoomToNode,
-  type WidgetEvent,
-  type WidgetEventType,
-  widgetEvents,
-} from './widgetEvents'

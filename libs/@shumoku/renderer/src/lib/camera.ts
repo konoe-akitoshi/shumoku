@@ -26,6 +26,8 @@ import {
   centreOn,
   type Frame,
   fitView,
+  flight,
+  frameBox,
   frameScale,
   fromTransform,
   isUsable,
@@ -82,6 +84,22 @@ export interface Camera {
   isPointerOver(): boolean
   /** Fit the whole drawing, and keep it fitted as the drawing or the container change. */
   reset(): void
+  /**
+   * Fly smoothly to the nodes with these `data-id`s, shown whole with `padding` (a fraction of
+   * their box, default 0.6) around them and zoomed in no further than `maxScale` × the fit
+   * (default 6); or to the fit (`'fit'`), which the view then keeps. Any input stops the flight
+   * where it is. With reduced motion asked for, it jumps. Returns false when none of the nodes is
+   * drawn.
+   */
+  flyTo(
+    target: readonly string[] | 'fit',
+    options?: { padding?: number; maxScale?: number },
+  ): boolean
+  /**
+   * Listen for the view being moved by a person (pointer, wheel, pinch, a 3D mouse, the zoom
+   * buttons), not by the host's own calls. Returns the unsubscribe.
+   */
+  onUserMove(listener: () => void): () => void
   /** Detach all listeners. Safe to call multiple times. */
   detach(): void
 }
@@ -120,6 +138,13 @@ const ADAPTIVE_OVERZOOM = 1.5
 
 /** The `PointerEvent.buttons` bit of the button holding a drag: the middle's is 4, the left's 1. */
 const buttonMask = (button: number) => (button === 1 ? 4 : 1)
+
+/** Ease a flight in and out, so it neither lurches off nor stops dead. */
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+
+/** Whether the person asked for less motion (a flight then jumps). */
+const reducedMotion = () =>
+  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** A drag shorter than this is a click. */
 const DRAG_THRESHOLD = 4
@@ -245,6 +270,19 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   let lastPointer: [number, number] | null = null
   /** Whether the pointer is over the svg. */
   let pointerOver = false
+  /** A flight the host asked for (`flyTo`): it owns the view until it lands or input stops it. */
+  let flying: {
+    at: (t: number) => View
+    duration: number
+    start: number | null
+    thenFit: boolean
+  } | null = null
+  const userMoveListeners = new Set<() => void>()
+  /** A person moved the view: a flight stops where it is, and the host hears of it. */
+  const userMoved = () => {
+    flying = null
+    for (const listener of userMoveListeners) listener()
+  }
 
   const write = () => {
     if (!isUsable(frame)) return
@@ -266,6 +304,15 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     }
     const [lo, hi] = limits()
     let v = view
+    if (flying) {
+      flying.start ??= now
+      const t = Math.min(1, (now - flying.start) / flying.duration)
+      v = flying.at(easeInOut(t))
+      if (t >= 1) {
+        fitted = flying.thenFit
+        flying = null
+      }
+    }
     if (panX !== 0 || panY !== 0) v = { x: v.x + panX, y: v.y + panY, z: v.z }
     panX = 0
     panY = 0
@@ -289,7 +336,10 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       }
     }
     if (!zooming) motionAnchor = null
-    if (driven) fitted = false
+    if (driven) {
+      fitted = false
+      userMoved()
+    }
     if (ease) {
       const target = Math.min(Math.log(hi), Math.max(Math.log(lo), ease.target))
       const current = Math.log(v.z)
@@ -300,7 +350,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     }
     view = keepInView(v, frame)
     write()
-    if (ease || driven) {
+    if (ease || driven || flying) {
       gesture()
       request()
     } else {
@@ -331,6 +381,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   /** The user moved the view: it no longer follows the fit, and any easing toward it stops. */
   const moved = () => {
     fitted = false
+    userMoved()
     gesture()
     request()
   }
@@ -612,6 +663,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
 
   /** Set the view at once, from a programmatic call. */
   const jump = (next: View) => {
+    flying = null
     ease = null
     zooms = []
     panX = 0
@@ -675,6 +727,65 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       fitted = true
     },
 
+    flyTo(target, flyOptions = {}) {
+      if (!isUsable(frame)) return false
+      let next: View
+      if (target === 'fit') {
+        next = fitView(frame)
+      } else {
+        let box: { x0: number; y0: number; x1: number; y1: number } | null = null
+        for (const id of target) {
+          const node = svg.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(id)}"]`)
+          const b = node?.getBBox()
+          if (!b || !(b.width > 0 && b.height > 0)) continue
+          box = box
+            ? {
+                x0: Math.min(box.x0, b.x),
+                y0: Math.min(box.y0, b.y),
+                x1: Math.max(box.x1, b.x + b.width),
+                y1: Math.max(box.y1, b.y + b.height),
+              }
+            : { x0: b.x, y0: b.y, x1: b.x + b.width, y1: b.y + b.height }
+        }
+        if (!box) return false
+        const { s } = frameScale(frame)
+        const [lo, hi] = limits()
+        next = frameBox(
+          { x: box.x0, y: box.y0, width: box.x1 - box.x0, height: box.y1 - box.y0 },
+          frame,
+          flyOptions.padding ?? 0.6,
+          lo,
+          Math.min(hi, (flyOptions.maxScale ?? 6) * s),
+        )
+      }
+      const thenFit = target === 'fit'
+      if (reducedMotion()) {
+        jump(next)
+        fitted = thenFit
+        return true
+      }
+      const path = flight(view, next, frame)
+      ease = null
+      zooms = []
+      panX = 0
+      panY = 0
+      flying = {
+        at: path.at,
+        duration: Math.min(2500, Math.max(500, path.length * 700)),
+        start: null,
+        thenFit,
+      }
+      request()
+      return true
+    },
+
+    onUserMove(listener) {
+      userMoveListeners.add(listener)
+      return () => {
+        userMoveListeners.delete(listener)
+      }
+    },
+
     detach() {
       if (raf !== null) cancelAnimationFrame(raf)
       raf = null
@@ -682,6 +793,8 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       settleTimer = null
       listeners.abort()
       motions.clear()
+      userMoveListeners.clear()
+      flying = null
       viewBoxObserver.disconnect()
       sizeObserver?.disconnect()
       svg.classList.remove(GESTURE_CLASS, 'camera-pan-ready', 'camera-panning')

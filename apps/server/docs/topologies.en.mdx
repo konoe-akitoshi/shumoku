@@ -66,7 +66,7 @@ There is nowhere to write coordinates or which way is up. Up and down come from 
 A 3Dconnexion SpaceMouse pans and zooms the diagram alongside the mouse (detail page, dashboards, shared pages). Push the cap sideways to pan, pull it up or press it down to zoom (about the cursor, or the centre when the cursor is off the diagram); Fit fits, and Shift, held, slows it down. On a dashboard the diagram under the cursor moves.
 
 - Needs: Chrome or Edge (WebHID), and **the page opened over HTTPS** (or on localhost). Over plain HTTP the browser turns WebHID off, so it cannot work (the button at the bottom right says so). To serve the Server over HTTPS, see "Reverse Proxy & HTTPS" in [Installation](./installation.en.mdx).
-- Connecting: press the joystick button at the bottom right of the detail or shared page and pick the device. Later visits connect on their own. A model without a serial number (the SpaceExplorer, for one) loses the browser's permission when unplugged: after plugging it back in, pick it with the button again.
+- Connecting: press the joystick button at the bottom right of a diagram (on a dashboard it appears when the pointer is over the widget) and pick the device. Later visits connect on their own. A model without a serial number (the SpaceExplorer, for one) loses the browser's permission when unplugged: after plugging it back in, pick it with the button again.
 - Linux: reading the device needs access to its hidraw node. Put this udev rule in place and apply it with `sudo udevadm control --reload && sudo udevadm trigger`; spacenavd can keep running.
 ```text
 # /etc/udev/rules.d/70-spacemouse.rules

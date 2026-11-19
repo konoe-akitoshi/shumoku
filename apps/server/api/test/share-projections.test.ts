@@ -141,7 +141,7 @@ describe('publicDashboardLayout — allow-listed widget config', () => {
           position: { x: 0, y: 0, w: 6, h: 4 },
           config: {
             topologyId: 't1',
-            showLabels: true,
+            followAlerts: true,
             // unknown / potentially sensitive keys:
             query: 'SELECT * WHERE secret',
             internalUrl: 'http://wiki.internal',
@@ -151,7 +151,7 @@ describe('publicDashboardLayout — allow-listed widget config', () => {
       ],
     })
     const out = JSON.parse(publicDashboardLayout(raw))
-    expect(out.widgets[0].config).toEqual({ topologyId: 't1', showLabels: true })
+    expect(out.widgets[0].config).toEqual({ topologyId: 't1', followAlerts: true })
     const blob = JSON.stringify(out)
     expect(blob).not.toContain('secret')
     expect(blob).not.toContain('wiki.internal')

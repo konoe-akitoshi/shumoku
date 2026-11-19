@@ -22,7 +22,7 @@ Dashboardは、Topology、device status、alertsなどのWidgetを一つの画�
 1. 管理者として **Dashboards** を開き、**New Dashboard** を選びます。
 2. **Dashboard Name**を入力し、**Create**を選びます。
 3. Dashboard上の追加操作からWidgetを選び、参照するTopologyまたはData Sourceを指定します。
-4. Widgetをドラッグまたはresizeして配置します。layoutは自動保存されます。
+4. Widgetの見出しをドラッグして移動し、右下の角でresizeします。**Save**で保存し、**Cancel**で編集前に戻ります。
 
 ## 共有
 

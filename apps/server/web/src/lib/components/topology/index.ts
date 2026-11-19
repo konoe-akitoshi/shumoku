@@ -1,8 +1,8 @@
 /**
  * Shared topology rendering kit: one `TopologyViewer` core + a
  * collection of composable overlay components. Every page that shows
- * a topology (dashboard widget, detail page, share page) should
- * compose from these rather than reinvent.
+ * a topology (dashboard widget, detail page, share page) uses
+ * `TopologyView`, which composes these; build on it rather than reinvent.
  *
  * Architecture:
  *
@@ -12,7 +12,7 @@
  *         <WeathermapLinkOverlay {context} metrics={metrics?.links?.[edge.id]} />
  *       {/snippet}
  *       <NodeStatusOverlay {svgElement} status />
- *       <HighlightOverlay  {svgElement} bind:this={highlight} />
+ *       <HighlightOverlay  {svgElement} {marks} />
  *       <TooltipOverlay    {svgElement} {graph} />
  *     {/snippet}
  *   </TopologyViewer>
@@ -26,11 +26,13 @@ export { default as HighlightOverlay } from './HighlightOverlay.svelte'
 export { default as NodeStatusOverlay } from './NodeStatusOverlay.svelte'
 export type { ElementKind, HoveredElement } from './TooltipOverlay.svelte'
 export { default as TooltipOverlay } from './TooltipOverlay.svelte'
+export { default as TopologyView } from './TopologyView.svelte'
 export type {
   DetailOptions,
   InteractionOptions,
   ViewerContext,
 } from './TopologyViewer.svelte'
 export { default as TopologyViewer } from './TopologyViewer.svelte'
+export { default as ViewerControls } from './ViewerControls.svelte'
 export type { WeathermapAnimation } from './WeathermapLinkOverlay.svelte'
 export { default as WeathermapLinkOverlay } from './WeathermapLinkOverlay.svelte'

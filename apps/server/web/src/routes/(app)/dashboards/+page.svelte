@@ -8,39 +8,64 @@
   } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
+  import { api } from '$lib/api'
+  import { DEFAULT_LAYOUT } from '$lib/dashboard/layout'
+  import { dashboardNames } from '$lib/dashboard/names.svelte'
   import { readOnlyAccess } from '$lib/stores/auth'
-  import {
-    dashboardError,
-    dashboardLoading,
-    dashboardStore,
-    dashboards,
-  } from '$lib/stores/dashboards'
+  import type { Dashboard } from '$lib/types'
+
+  let dashboards = $state<Dashboard[]>([])
+  let loading = $state(true)
+  let error = $state<string | null>(null)
 
   let showCreateModal = $state(false)
   let newDashboardName = $state('')
   let creating = $state(false)
   let deleteConfirmId = $state<string | null>(null)
 
-  onMount(() => {
-    dashboardStore.load()
+  function failed(err: unknown, fallback: string) {
+    error = err instanceof Error ? err.message : fallback
+  }
+
+  onMount(async () => {
+    try {
+      dashboards = await api.dashboards.list()
+      for (const d of dashboards) dashboardNames[d.id] = d.name
+    } catch (err) {
+      failed(err, 'Failed to load dashboards')
+    } finally {
+      loading = false
+    }
   })
 
   async function handleCreate() {
     if (!newDashboardName.trim()) return
 
     creating = true
-    const dashboard = await dashboardStore.create(newDashboardName.trim())
-    creating = false
-
-    if (dashboard) {
+    error = null
+    try {
+      const dashboard = await api.dashboards.create({
+        name: newDashboardName.trim(),
+        layoutJson: JSON.stringify(DEFAULT_LAYOUT),
+      })
       showCreateModal = false
       newDashboardName = ''
       goto(`/dashboards/${dashboard.id}`)
+    } catch (err) {
+      failed(err, 'Failed to create dashboard')
+    } finally {
+      creating = false
     }
   }
 
   async function handleDelete(id: string) {
-    await dashboardStore.delete(id)
+    error = null
+    try {
+      await api.dashboards.delete(id)
+      dashboards = dashboards.filter((d) => d.id !== id)
+    } catch (err) {
+      failed(err, 'Failed to delete dashboard')
+    }
     deleteConfirmId = null
   }
 
@@ -73,18 +98,18 @@
   </div>
 
   <!-- Error Message -->
-  {#if $dashboardError}
+  {#if error}
     <div class="mb-4 p-4 bg-danger/10 border border-danger/20 rounded-lg text-danger">
-      {$dashboardError}
+      {error}
     </div>
   {/if}
 
   <!-- Loading -->
-  {#if $dashboardLoading && $dashboards.length === 0}
+  {#if loading && dashboards.length === 0}
     <div class="flex items-center justify-center py-12">
       <SpinnerIcon size={32} class="animate-spin text-theme-text-muted" />
     </div>
-  {:else if $dashboards.length === 0}
+  {:else if dashboards.length === 0}
     <!-- Empty State -->
     <div class="flex flex-col items-center justify-center py-16 text-center">
       <SquaresFourIcon size={64} class="text-theme-text-muted mb-4" />
@@ -108,7 +133,7 @@
   {:else}
     <!-- Dashboard Grid -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {#each $dashboards as dashboard}
+      {#each dashboards as dashboard (dashboard.id)}
         <div
           class="group relative bg-theme-bg-elevated rounded-lg border border-theme-border hover:border-primary/50 transition-colors overflow-hidden"
         >

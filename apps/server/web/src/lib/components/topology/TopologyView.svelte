@@ -62,13 +62,13 @@
 
 <script lang="ts">
   /**
-   * Detail-page view of a topology. Composes the shared TopologyViewer
-   * with the standard overlay set, plus detail-page chrome (breadcrumb,
-   * zoom toolbar, legend, warnings).
+   * A topology, as every page shows one: the detail page, the share page and a dashboard widget.
+   * Loads the drawing the Server baked (polling while it is baked again), draws it with the
+   * standard overlays (live traffic, node status, marks, tooltips) and the camera buttons.
    *
-   * Kept as a named component (rather than inlined in the route) so
-   * external imperative APIs (`panToNode`, `getSvgElement`) used by the
-   * search palette continue to work without refactoring callers.
+   * `compact` is the dashboard widget's form: the camera buttons appear on hover, and the legend
+   * and the warnings banner give the room to the drawing. A host passes `marks` to highlight
+   * nodes and adds its own buttons with `controls`.
    */
   import { darkTheme, diagramTitle, lightTheme, type NetworkGraph, type Node } from '@shumoku/core'
   import {
@@ -79,24 +79,9 @@
     spaceMouseConnected,
     spaceMouseOffer,
   } from '@shumoku/renderer'
-  import {
-    CornersOutIcon,
-    GearSixIcon,
-    JoystickIcon,
-    MagnifyingGlassIcon,
-    MagnifyingGlassMinusIcon,
-    MagnifyingGlassPlusIcon,
-  } from 'phosphor-svelte'
-  import { onDestroy } from 'svelte'
+  import { GearSixIcon, JoystickIcon, MagnifyingGlassIcon } from 'phosphor-svelte'
+  import { onDestroy, type Snippet } from 'svelte'
   import { api } from '$lib/api'
-  import {
-    HighlightOverlay,
-    type HoveredElement,
-    NodeStatusOverlay,
-    TooltipOverlay,
-    TopologyViewer,
-    WeathermapLinkOverlay,
-  } from '$lib/components/topology'
   import {
     type LiveSource,
     linkMapping,
@@ -114,6 +99,12 @@
     UTILIZATION_STEPS,
     utilizationColor,
   } from '$lib/weathermap'
+  import HighlightOverlay from './HighlightOverlay.svelte'
+  import NodeStatusOverlay from './NodeStatusOverlay.svelte'
+  import TooltipOverlay, { type HoveredElement } from './TooltipOverlay.svelte'
+  import TopologyViewer from './TopologyViewer.svelte'
+  import ViewerControls from './ViewerControls.svelte'
+  import WeathermapLinkOverlay from './WeathermapLinkOverlay.svelte'
 
   // --- Props (Svelte 5 runes) ---
   interface Props {
@@ -144,6 +135,20 @@
      * share page names its token-scoped stream; `null` shows the drawing without them.
      */
     liveSource?: LiveSource | null
+    /** The dashboard widget's form: camera buttons on hover, no legend or warnings banner. */
+    compact?: boolean
+    /** Who a plain wheel belongs to (`TopologyViewer`): `cooperative` inside a scrolling page. */
+    wheel?: 'preference' | 'cooperative'
+    /** Nodes to highlight: node id → colour (`undefined`: the default highlight colour). */
+    marks?: ReadonlyMap<string, string | undefined>
+    /** Dim what `marks` leaves out. */
+    dimOthers?: boolean
+    /** Marked nodes that are new: they beat with a glow. */
+    fresh?: ReadonlySet<string>
+    /** The host's own buttons, added below the camera buttons. */
+    controls?: Snippet
+    /** Called whenever a drawing has been shown (first load, and each one drawn again). */
+    onloaded?: (graph: NetworkGraph) => void
   }
   let {
     topologyId = '',
@@ -154,6 +159,13 @@
     onSubgraphSelect,
     graphLoader,
     liveSource,
+    compact = false,
+    wheel = 'preference',
+    marks,
+    dimOthers = false,
+    fresh,
+    controls,
+    onloaded,
   }: Props = $props()
 
   // --- State ---
@@ -204,6 +216,35 @@
     () => void loadGraph(),
   )
 
+  // --- Freshness: a screen nobody watches must say when what it shows has stopped updating ---
+
+  /** Live values older than this are stale (the Server polls far more often). */
+  const LIVE_STALE_MS = 3 * 60_000
+  /** A lost connection is said once it has lasted this long (a reconnect is quicker). */
+  const DISCONNECT_GRACE_MS = 15_000
+  let clock = $state(Date.now())
+  let disconnectedSince = $state<number | null>(null)
+  $effect(() => {
+    const timer = setInterval(() => {
+      clock = Date.now()
+    }, 5_000)
+    return () => clearInterval(timer)
+  })
+  $effect(() => {
+    // Only a feed that had data can go quiet; a topology with no metrics source never has any.
+    if (!preferences.liveUpdates || !live.metrics || live.connected) disconnectedSince = null
+    else disconnectedSince ??= Date.now()
+  })
+  /** When the live values stopped, or null while they are current. */
+  const liveStoppedAt = $derived.by(() => {
+    if (!preferences.liveUpdates || !live.metrics) return null
+    if (disconnectedSince !== null && clock - disconnectedSince > DISCONNECT_GRACE_MS) {
+      return Math.min(disconnectedSince, live.metrics.timestamp ?? disconnectedSince)
+    }
+    const at = live.metrics.timestamp
+    return at && clock - at > LIVE_STALE_MS ? at : null
+  })
+
   // --- Data loading ---
 
   // Poll timer for server-side bakes: short interval while the first layout
@@ -240,6 +281,7 @@
         record = res.record
         serverScene = res.scene
         hasGraph = true
+        onloaded?.(res.graph)
       }
       building = res.stale === true
       if (res.stale) scheduleRefresh(5000)
@@ -266,6 +308,51 @@
 
   export function panToNode(nodeId: string): void {
     viewer?.panToNode(nodeId)
+  }
+
+  /** The whole drawing back in view, followed again as the drawing and the box change. */
+  export function fit(): void {
+    viewer?.resetZoom()
+  }
+
+  export function getCameraTransform(): { x: number; y: number; k: number } | null {
+    return viewer?.getCameraTransform() ?? null
+  }
+
+  export function setCameraTransform(t: { x: number; y: number; k: number }): void {
+    viewer?.setCameraTransform(t)
+  }
+
+  /** Fly smoothly to these nodes (shown whole, with room around), or back to the fit. */
+  export function flyTo(
+    target: readonly string[] | 'fit',
+    options?: { padding?: number; maxScale?: number },
+  ): boolean {
+    return viewer?.flyTo(target, options) ?? false
+  }
+
+  /**
+   * Listen for a person moving the view (not the host's calls). Returns the unsubscribe. Works
+   * before the drawing has loaded: the listener is kept here and joined to the viewer once it is.
+   */
+  export function onUserMove(listener: () => void): () => void {
+    userMoveListeners.add(listener)
+    return () => {
+      userMoveListeners.delete(listener)
+    }
+  }
+  const userMoveListeners = new Set<() => void>()
+  $effect(() => {
+    const current = viewer
+    if (!current) return
+    return current.onUserMove(() => {
+      for (const listener of userMoveListeners) listener()
+    })
+  })
+
+  /** Whether the pointer is over the diagram. */
+  export function isPointerOver(): boolean {
+    return viewer?.isPointerOver() ?? false
   }
 
   // Sheets removed in the engine swap; revisit as a view.
@@ -443,7 +530,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="diagram-container">
+<div class="diagram-container topology-view">
   {#if loading}
     <div class="loading">
       <div class="spinner"></div>
@@ -455,11 +542,17 @@
       <span>{error}</span>
     </div>
   {:else if graph && serverScene}
-    {#if preferences.liveUpdates && live.warnings.length > 0}
+    {#if !compact && preferences.liveUpdates && live.warnings.length > 0}
       <div class="warnings-banner">
         {#each live.warnings as warning}
           <span class="warning-text">{warning}</span>
         {/each}
+      </div>
+    {/if}
+
+    {#if liveStoppedAt !== null}
+      <div class="live-stopped" role="status">
+        Live data stopped · last {new Date(liveStoppedAt).toLocaleTimeString()}
       </div>
     {/if}
 
@@ -470,6 +563,9 @@
       theme={currentTheme}
       mode="view"
       camera={cameraOptions}
+      {wheel}
+      interaction={compact ? { contextMenu: false, keyboard: false } : {}}
+      detail={compact ? { portLabels: 'auto', linkLabels: 'auto', nodeShadow: false } : {}}
       onselect={handleSelect}
     >
       {#snippet linkOverlay(
@@ -494,28 +590,17 @@
           status={nodeStatusView}
           enabled={preferences.liveUpdates && preferences.showNodeStatus}
         />
-        <HighlightOverlay {svgElement} />
+        <HighlightOverlay {svgElement} {marks} {dimOthers} {fresh} pulseAnimation={!compact} />
         <TooltipOverlay {svgElement} graph={activeGraph} contentBuilder={buildTooltip} />
       {/snippet}
     </TopologyViewer>
   {/if}
 
-  <!-- Zoom / utility controls -->
-  <div class="controls">
-    <div class="control-group">
-      <button onclick={() => viewer?.zoomBy(1.5)} title="Zoom In">
-        <MagnifyingGlassPlusIcon size={18} />
-      </button>
-      <button onclick={() => viewer?.zoomBy(1 / 1.5)} title="Zoom Out">
-        <MagnifyingGlassMinusIcon size={18} />
-      </button>
-    </div>
-    <div class="control-group">
-      <button onclick={() => viewer?.resetZoom()} title="Fit to View">
-        <CornersOutIcon size={18} />
-      </button>
+  {#if graph && serverScene}
+    <ViewerControls {compact} onzoom={(f) => viewer?.zoomBy(f)} onfit={fit}>
       {#if spaceMouseOffered !== 'none'}
         <button
+          type="button"
           onclick={handleConnectSpaceMouse}
           title={spaceMouseOn
             ? 'SpaceMouse connected'
@@ -528,20 +613,21 @@
         </button>
       {/if}
       {#if onSearchOpen}
-        <button onclick={onSearchOpen} title="Search Nodes (Cmd/Ctrl+K)">
+        <button type="button" onclick={onSearchOpen} title="Search Nodes (Cmd/Ctrl+K)">
           <MagnifyingGlassIcon size={18} />
         </button>
       {/if}
       {#if onToggleSettings}
-        <button onclick={onToggleSettings} title="Settings" class:active={settingsOpen}>
+        <button type="button" onclick={onToggleSettings} title="Settings" class:active={settingsOpen}>
           <GearSixIcon size={18} />
         </button>
       {/if}
-    </div>
-  </div>
+      {@render controls?.()}
+    </ViewerControls>
+  {/if}
 
   <!-- Legend (only when traffic flow is on) -->
-  {#if preferences.liveUpdates && preferences.showTrafficFlow}
+  {#if !compact && preferences.liveUpdates && preferences.showTrafficFlow}
     <div class="legend">
       <div class="legend-title">Utilization</div>
       <div class="legend-items">
@@ -616,48 +702,6 @@
     display: block;
   }
 
-  .controls {
-    position: absolute;
-    bottom: 16px;
-    right: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    z-index: 5;
-  }
-
-  .control-group {
-    display: flex;
-    flex-direction: column;
-    background: var(--color-bg-elevated, #ffffff);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 6px;
-    overflow: hidden;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  }
-
-  .control-group button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    color: var(--color-text, #111827);
-    transition: background 0.15s;
-  }
-
-  .control-group button:hover {
-    background: var(--color-bg, #f3f4f6);
-  }
-
-  .control-group button.active {
-    background: var(--primary, #3b82f6);
-    color: white;
-  }
-
   .legend {
     position: absolute;
     bottom: 16px;
@@ -697,5 +741,21 @@
     width: 16px;
     height: 3px;
     border-radius: 2px;
+  }
+  .live-stopped {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+    background: #b91c1c;
+    box-shadow: 0 1px 4px rgb(0 0 0 / 0.3);
+    white-space: nowrap;
+    pointer-events: none;
   }
 </style>

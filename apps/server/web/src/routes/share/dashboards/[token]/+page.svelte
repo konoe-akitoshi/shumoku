@@ -1,70 +1,31 @@
 <script lang="ts">
-  import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
-  import { mount, onMount, tick, unmount } from 'svelte'
-  import { browser } from '$app/environment'
   import { page } from '$app/state'
   import { api } from '$lib/api'
   import Logo from '$lib/components/Logo.svelte'
   import ThemeToggle from '$lib/components/ThemeToggle.svelte'
-  import { readerContext } from '$lib/dashboard-reader'
-  import { dashboardStore } from '$lib/stores/dashboards'
-  import type { WidgetInstance } from '$lib/types'
-  import { getWidget, initializeWidgets } from '$lib/widgets'
+  import DashboardGrid from '$lib/dashboard/DashboardGrid.svelte'
+  import { DashboardState } from '$lib/dashboard/dashboard.svelte'
+  import { type DashboardLayout, parseLayout } from '$lib/dashboard/layout'
+  import { readerFor } from '$lib/dashboard/reader'
+
+  const token = $derived(page.params.token ?? '')
 
   let name = $state('')
   let loading = $state(true)
   let error = $state('')
-  let widgets: WidgetInstance[] = $state([])
-  let layoutData: {
-    columns?: number
-    rowHeight?: number
-    margin?: number
-    widgets: WidgetInstance[]
-  } | null = $state(null)
+  let layout = $state<DashboardLayout | null>(null)
 
-  let gridContainer: HTMLDivElement | null = $state(null)
-  let grid: GridStack | null = $state(null)
-  let mountedComponents = new Map<string, ReturnType<typeof mount>>()
-  let gridStackReady = false
+  // Widgets read through this dashboard's token, so they work without a session (e.g. inside an
+  // iframe embed). A new token is a new dashboard: the page is built again for it.
+  // svelte-ignore state_referenced_locally
+  const dashboard = new DashboardState(readerFor({ kind: 'shared', token }))
 
-  const token = $derived(page.params.token)
-
-  onMount(() => {
-    initializeWidgets()
-    loadDashboard()
-
-    return () => {
-      cleanupAllWidgets()
-      dashboardStore.clearCurrent()
-      if (grid) {
-        grid.destroy(true)
-        grid = null
-      }
-    }
-  })
-
-  // Initialize grid when container is bound and data is ready
-  $effect(() => {
-    if (browser && gridContainer && layoutData && !grid) {
-      const data = layoutData
-      tick().then(() => initGrid(data))
-    }
-  })
-
-  async function loadDashboard() {
-    if (!token) return
+  async function load(shareToken: string) {
+    if (!shareToken) return
     try {
-      const data = await api.shared.getDashboard(token)
+      const data = await api.shared.getDashboard(shareToken)
       name = data.name || 'Shared Dashboard'
-
-      try {
-        const layout = JSON.parse(data.layoutJson)
-        widgets = layout.widgets || []
-        layoutData = layout
-        dashboardStore.setLayout(layout)
-      } catch {
-        error = 'Failed to parse dashboard layout'
-      }
+      layout = parseLayout(data.layoutJson)
     } catch {
       error = 'Failed to load dashboard'
     } finally {
@@ -72,96 +33,9 @@
     }
   }
 
-  function cleanupAllWidgets() {
-    for (const [, component] of mountedComponents) {
-      try {
-        unmount(component)
-      } catch {}
-    }
-    mountedComponents.clear()
-  }
-
-  async function initGrid(layout: {
-    columns?: number
-    rowHeight?: number
-    margin?: number
-    widgets: WidgetInstance[]
-  }) {
-    if (!browser || !gridContainer) return
-
-    try {
-      const GridStackModule = await import('gridstack')
-      const { GridStack } = GridStackModule
-      await import('gridstack/dist/gridstack.min.css')
-
-      if (!gridStackReady) {
-        GridStack.renderCB = (el: HTMLElement, widget: GridStackNode) => {
-          const widgetId = widget.id as string
-          if (!widgetId) return
-
-          const widgetData = widgets.find((w) => w.id === widgetId)
-          if (!widgetData) return
-
-          const widgetDef = getWidget(widgetData.type)
-          if (!widgetDef) {
-            // Set as text, not interpolated innerHTML, so a crafted type can't inject markup.
-            const placeholder = document.createElement('div')
-            placeholder.className =
-              'h-full flex items-center justify-center bg-theme-bg-elevated rounded-lg border border-theme-border text-theme-text-muted'
-            placeholder.textContent = `Unknown widget: ${widgetData.type}`
-            el.replaceChildren(placeholder)
-            return
-          }
-
-          try {
-            const component = mount(widgetDef.component, {
-              target: el,
-              props: {
-                id: widgetId,
-                config: widgetData.config,
-                editMode: false,
-              },
-              // Widgets read through this dashboard's token, so they work without a session
-              // (e.g. inside an iframe embed).
-              context: readerContext({ kind: 'shared', token: token ?? '' }),
-            })
-            mountedComponents.set(widgetId, component)
-          } catch (e) {
-            console.error(`Failed to mount widget ${widgetId}:`, e)
-            el.innerHTML = `<div class="h-full flex items-center justify-center text-danger">Error loading widget</div>`
-          }
-        }
-        gridStackReady = true
-      }
-
-      grid = GridStack.init(
-        {
-          column: layout.columns || 12,
-          cellHeight: layout.rowHeight || 100,
-          margin: layout.margin || 8,
-          float: true,
-          animate: true,
-          staticGrid: true,
-          disableResize: true,
-          disableDrag: true,
-        },
-        gridContainer,
-      )
-      if (!grid) throw new Error('Dashboard grid could not be initialized')
-
-      const gridWidgets: GridStackWidget[] = widgets.map((w) => ({
-        id: w.id,
-        x: w.position.x,
-        y: w.position.y,
-        w: w.position.w,
-        h: w.position.h,
-      }))
-
-      grid.load(gridWidgets)
-    } catch (e) {
-      console.error('Failed to initialize GridStack:', e)
-    }
-  }
+  $effect(() => {
+    void load(token)
+  })
 </script>
 
 <svelte:head> <title>{name || 'Shared Dashboard'} - Shumoku</title> </svelte:head>
@@ -191,30 +65,14 @@
       <div class="flex items-center justify-center h-full">
         <p class="text-theme-text-muted">{error}</p>
       </div>
-    {:else if widgets.length === 0}
+    {:else if !layout || layout.widgets.length === 0}
       <div class="flex items-center justify-center h-full">
         <p class="text-theme-text-muted">This dashboard is empty.</p>
       </div>
     {:else}
-      <div bind:this={gridContainer} class="grid-stack p-4">
-        <!-- GridStack creates items via grid.load() and renderCB -->
+      <div class="p-4 min-h-full">
+        <DashboardGrid bind:layout {dashboard} />
       </div>
     {/if}
   </div>
 </div>
-
-<style>
-  :global(.grid-stack) {
-    background: transparent;
-    min-height: 100%;
-  }
-
-  :global(.grid-stack-item-content) {
-    background: transparent;
-    overflow: hidden;
-  }
-
-  :global(.grid-stack-static > .grid-stack-item) {
-    cursor: default;
-  }
-</style>

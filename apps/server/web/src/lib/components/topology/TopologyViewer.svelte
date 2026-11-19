@@ -162,6 +162,8 @@
   // new `cameraOptions` reference.
 
   let camera = $state.raw<Camera | null>(null)
+  /** The host's listeners for a person moving the view; they outlive a camera re-attached. */
+  const userMoveListeners = new Set<() => void>()
   $effect(() => {
     if (cameraOptions === false || !panZoomEnabled || !svgElement) {
       camera = null
@@ -171,7 +173,11 @@
     camera = c
     // A connected SpaceMouse drives the diagram the pointer is over (a dashboard has several).
     const detachSpaceMouse = attachSpaceMouse(c)
+    const stopUserMoves = c.onUserMove(() => {
+      for (const listener of userMoveListeners) listener()
+    })
     return () => {
+      stopUserMoves()
       detachSpaceMouse()
       c.detach()
       camera = null
@@ -243,6 +249,27 @@
 
   export function getSvgElement(): SVGSVGElement | null {
     return svgElement
+  }
+
+  /** Fly smoothly to these nodes (shown whole, with room around), or back to the fit. */
+  export function flyTo(
+    target: readonly string[] | 'fit',
+    options?: { padding?: number; maxScale?: number },
+  ): boolean {
+    return camera?.flyTo(target, options) ?? false
+  }
+
+  /** Listen for a person moving the view (not the host's calls). Returns the unsubscribe. */
+  export function onUserMove(listener: () => void): () => void {
+    userMoveListeners.add(listener)
+    return () => {
+      userMoveListeners.delete(listener)
+    }
+  }
+
+  /** Whether the pointer is over the diagram. */
+  export function isPointerOver(): boolean {
+    return camera?.isPointerOver() ?? false
   }
 
   /** Snapshot the current camera transform so it can be restored later. */

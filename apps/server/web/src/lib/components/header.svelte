@@ -1,7 +1,7 @@
 <script lang="ts">
   import { CaretRightIcon } from 'phosphor-svelte'
   import { page } from '$app/state'
-  import { dashboards } from '$lib/stores/dashboards'
+  import { dashboardNames } from '$lib/dashboard/names.svelte'
   import { topologiesList } from '$lib/stores/topologies'
   import ThemeToggle from './ThemeToggle.svelte'
 
@@ -44,8 +44,8 @@
         const t = $topologiesList.find((x) => x.id === seg)
         if (t) labels[seg] = t.name
       } else if (parent === 'dashboards') {
-        const d = $dashboards.find((x) => x.id === seg)
-        if (d) labels[seg] = d.name
+        const name = dashboardNames[seg]
+        if (name) labels[seg] = name
       }
     }
     return labels

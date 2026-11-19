@@ -9,24 +9,63 @@ Dashboards let you combine multiple topologies and metric widgets into a single 
 ## Creating a Dashboard
 
 1. Navigate to **Dashboards** in the sidebar
-2. Click **Add Dashboard**
+2. Click **New Dashboard**
 3. Enter a name and save
 
-## Adding Widgets
+## Adding and Configuring Widgets
 
-Click the **+** button on the dashboard to add widgets. Available widget types:
+Click **Edit**, then **Add Widget**. A widget that needs settings opens them as soon as it is added; change them later with the widget's gear button.
 
-- **Topology** — Embedded topology viewer with live metrics
-- **Device Status** — Donut chart showing device status breakdown
-- **Alerts** — Active alerts list from connected data sources
+Available widget types:
+
+- **Topology** — A topology, with live traffic and alert highlights
+- **Alerts** — Alerts from a monitoring system (Zabbix, Prometheus, Grafana, …)
+- **Device Status** — Donut chart of device status by type
+- **Metrics Gauge** — One figure from a topology's live metrics (nodes up, average utilization, …)
+- **Health Status** / **Data Sources** — The Server's own state. Not shown on a shared dashboard
+
+## Moving Around a Topology
+
+Drag a topology to move it; zoom with Ctrl/⌘ + wheel or a pinch. Hovering the widget shows buttons in its corner: **Fit** (the four arrows) brings the whole topology back into view. A SpaceMouse moves the topology under the pointer (to connect one, see "SpaceMouse" in [Topologies](./topologies.en.mdx)).
+
+## Alerts on the Topologies
+
+An Alerts widget highlights the alerting nodes on the dashboard's topologies, in the colour of each alert's severity.
+
+- A node stays highlighted for as long as its alert is active; the nodes of new alerts (started within 10 minutes) beat besides.
+- Hovering an alert moves to its node, and leaving it moves back. Clicking opens its details and stays on the node.
+
+An Alerts widget lists its alerts this way:
+
+- Alerts with the same host and title are one row, with how many times they came (`×860`) and when the latest did, so an alert raised again and again (an SNMP trap) does not fill the list.
+- Counts by severity sit on top; the rows go from the most severe down, the latest first within a severity.
+- An alert still open but not raised again for **Set aside as stale after (hours)** (24 by default) goes to **Stale** below the list, and shows grey on the topologies instead of in its severity's colour, so a trap trigger with no recovery or an alert left open does not bury what is happening now. 0 keeps them in the list.
+
+An alert goes away when the monitoring system resolves it. A trigger with no recovery condition (in Zabbix, say, a `snmptrap.fallback` trigger that any trap fires) stays open until someone closes it: give it one in the monitoring system (such as `nodata(...)`), or lower its severity.
+
+Hovering a type or a segment of a Device Status widget brings those nodes forward on the same topology.
+
+Nodes are matched to alerts through the topology's mapping (which monitored host each node is). A node that is not mapped is not highlighted.
+
+## On a Wall Display
+
+So that a screen nobody touches still tells what is going on:
+
+- **New alerts**: an alert that started within 10 minutes has **NEW** on its row, and its nodes beat on the topology. "New" is counted from when the alert started, so opening the page again does not change it.
+- **Recent changes**: the top of an Alerts widget lists, with times, the alerts that started and were resolved in the last 30 minutes. Three or more of one kind close together (a switch going down with everything behind it) are one line, such as "4 new". Hovering a line brings its nodes forward on the topology. Resolved ones are those this page saw while open.
+- **When updates stop**: when the alerts cannot be read, or have not been read for a while (three refresh intervals, at least 90 seconds), the Alerts widget shows a red **Not updating** bar with the last time they were. When a topology's live data has not arrived for 3 minutes, or its connection is lost, **Live data stopped** shows over the drawing. A monitoring outage never reads as "All clear". The last update time sits at the top right.
+- **Follow new alerts** (a Topology widget's setting, off by default): a new alert at or above **Follow alerts from** (High and above by default) makes the camera fly to its nodes, and back to the whole topology after 20 seconds. Alerts that come together are shown in one flight, and flights are at least 30 seconds apart. While it holds, the bottom left counts down; **Stay** keeps the view there (**Resume** goes on), **Back** returns at once.
+- **Back to the whole topology after (seconds idle)** (120 by default): a topology someone moved and left goes back to the whole topology after that long. 0 leaves it where it was left.
+
+A person always comes first: moving the view (drag, wheel, SpaceMouse, …) stops any automatic movement at once, and none starts again for a while (the idle time above, or 2 minutes if it is 0). Nothing moves while the pointer is over the topology. With reduced motion asked for in the system settings, the camera jumps instead of flying.
 
 ## Layout
 
-Widgets can be resized and rearranged by dragging. The layout is saved automatically.
+While editing, drag a widget by its header to move it, and by its bottom-right corner to resize it. **Save** keeps the layout; **Cancel** goes back to how it was.
 
 ## Sharing
 
-Click the **Share** button on a dashboard to generate a public link. Shared dashboards display live data without requiring authentication.
+Click the **Share** button on a dashboard to generate a public link. Shared dashboards display live data without requiring authentication. The widgets' display settings (such as following new alerts, or when an alert counts as stale) work the same there.
 
 A shared page (a shared dashboard or a shared topology) picks its theme in this order:
 
