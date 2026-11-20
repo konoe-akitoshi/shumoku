@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { ranksOf } from './ranks.js'
-import { sidesByRank } from './sides.js'
+import { enclosedOf, sidesByRank } from './sides.js'
 import { problemOf } from './testing/support.js'
 
 // top reaches a and b one cable away, and a and b are level; c hangs off a, and x and y are
@@ -68,5 +68,36 @@ describe('the sides a line leaves its boxes by, from the ranks of its ends', () 
   it('routes no line inside a unit', () => {
     for (const l of p.lines.filter((x) => x.role === 'inside'))
       expect(sidesByRank(l, rank)).toBeUndefined()
+  })
+
+  it('takes a line between level boxes out by the bottom when an end has no side door', () => {
+    const l = line('a', 'b', 'oriented')
+    expect(l).toBeDefined()
+    if (!l) return
+    expect(sidesByRank(l, rank, new Set(), new Set(['a']))).toEqual({
+      a: ['bottom'],
+      b: ['bottom'],
+    })
+    expect(sidesByRank(l, rank, new Set(), new Set(['b']))).toEqual({
+      a: ['bottom'],
+      b: ['bottom'],
+    })
+    // between ranks the line leaves by the bottom and the top already
+    const down = line('top', 'a', 'oriented')
+    expect(down).toBeDefined()
+    if (!down) return
+    const sides = sidesByRank(down, rank, new Set(), new Set(['a']))
+    expect([sides?.a, sides?.b]).toContainEqual(['top'])
+  })
+})
+
+describe('the members of a unit with no side door', () => {
+  it('are those with a member on either side of them', () => {
+    const members = new Map([
+      ['pair', ['p1', 'p2']],
+      ['three', ['t1', 't2', 't3']],
+      ['four', ['f1', 'f2', 'f3', 'f4']],
+    ])
+    expect([...enclosedOf(members)].sort()).toEqual(['f2', 'f3', 't2'])
   })
 })
