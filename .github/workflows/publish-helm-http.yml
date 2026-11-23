@@ -1,0 +1,66 @@
+name: Publish HTTP Helm repository
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Existing OCI chart version to mirror (for example 0.2.0)
+        required: true
+        type: string
+
+concurrency:
+  group: publish-helm-http
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.0.4
+      - name: Download the published OCI chart
+        env:
+          VERSION: ${{ inputs.version }}
+          OWNER: ${{ github.repository_owner }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || exit 1
+          mkdir -p dist
+          helm pull "oci://ghcr.io/${OWNER}/charts/shumoku" --version "$VERSION" --destination dist
+      - name: Update the HTTP repository branch
+        env:
+          VERSION: ${{ inputs.version }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          repository_dir="$RUNNER_TEMP/helm-http"
+          # Distinguish a missing branch from an authentication/network failure.
+          git ls-remote --heads origin refs/heads/helm-repo > "$RUNNER_TEMP/helm-ref"
+          if [[ -s "$RUNNER_TEMP/helm-ref" ]]; then
+            git fetch origin helm-repo
+            git worktree add --detach "$repository_dir" FETCH_HEAD
+          else
+            git worktree add --detach "$repository_dir" HEAD
+            git -C "$repository_dir" switch --orphan helm-repo
+          fi
+          bash scripts/update-helm-repository.sh "dist/shumoku-${VERSION}.tgz" \
+            "$repository_dir" "https://raw.githubusercontent.com/${REPOSITORY}/helm-repo"
+          git -C "$repository_dir" config user.name 'github-actions[bot]'
+          git -C "$repository_dir" config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git -C "$repository_dir" add index.yaml "shumoku-${VERSION}.tgz"
+          if ! git -C "$repository_dir" diff --cached --quiet; then
+            git -C "$repository_dir" commit -s -m "Publish Helm chart ${VERSION} over HTTP"
+            git -C "$repository_dir" push origin HEAD:refs/heads/helm-repo
+          fi
