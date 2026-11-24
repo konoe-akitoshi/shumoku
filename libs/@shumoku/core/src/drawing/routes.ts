@@ -8,7 +8,7 @@ import type { Layers } from './layers.js'
 import { must } from './must.js'
 import { boxKey, type FrameId, type Line, type Problem } from './problem.js'
 import type { Side } from './scene.js'
-import { sealedOf, sidesByRank } from './sides.js'
+import { sidesByRank } from './sides.js'
 
 /**
  * A line's way through the corridors: the nodes it passes, the doors between them, and the wall
@@ -219,9 +219,8 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     return undefined
   }
 
-  const sealed = sealedOf(problem)
   for (const line of problem.lines) {
-    const sides = sidesByRank(line, rank, sealed)
+    const sides = sidesByRank(line, rank)
     if (!sides) continue
     const allowed = allowedFrames(problem, line)
     const sideNodes = (end: Line['a'], list: readonly Side[]) =>

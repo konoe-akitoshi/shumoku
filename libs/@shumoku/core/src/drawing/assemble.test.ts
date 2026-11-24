@@ -61,7 +61,7 @@ describe('the scene assemble makes', () => {
 })
 
 describe('the depth of each group in the scene', () => {
-  it('counts the groups that hold it, through leaf groups solved on their own', () => {
+  it('counts the groups that hold it, through the groups it sits in', () => {
     const yaml = `
 groups:
   - id: site

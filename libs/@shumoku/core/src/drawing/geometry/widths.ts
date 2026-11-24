@@ -8,15 +8,7 @@ import { must } from '../must.js'
 import { ROOT } from '../problem.js'
 import type { Lane, Var } from '../tracks.js'
 import type { Plan } from './plan.js'
-import {
-  type Axis,
-  after,
-  type Constraints,
-  framePorts,
-  join,
-  portChain,
-  type Sep,
-} from './system.js'
+import { type Axis, after, type Constraints, join, portChain, type Sep } from './system.js'
 
 /** A line's step from one x to the next (a run along a row, between its two ends). */
 export interface Step {
@@ -61,10 +53,6 @@ function columnWidths(
 ): Constraints {
   const { metrics, corridors, tracks } = plan
   const sep: Sep[] = []
-  // the line a portal ends: two portals side by side are as far apart as their lines are
-  const lineOfPortal = new Map(
-    plan.problem.items.flatMap((i) => (i.kind === 'portal' ? [[i.id, i.line] as const] : [])),
-  )
   for (const [id, node] of corridors.nodes.entries()) {
     if (node.kind !== 'column') continue
     const near = corridors.around.get(id) ?? {}
@@ -84,17 +72,11 @@ function columnWidths(
         : plan.isGroup(near.right)
           ? whiteOf(metrics)
           : keepOff(metrics, plan.ported(near.right, 'left'))
-    const [lp, rp] = [
-      near.left === undefined ? undefined : plan.byLine.get(lineOfPortal.get(near.left) ?? ''),
-      near.right === undefined ? undefined : plan.byLine.get(lineOfPortal.get(near.right) ?? ''),
-    ]
     const gap =
-      lp && rp
-        ? pitchOf(metrics, lp, rp)
-        : (near.left !== undefined && plan.isGroup(near.left)) ||
-            (near.right !== undefined && plan.isGroup(near.right))
-          ? metrics.groupGap
-          : metrics.gap
+      (near.left !== undefined && plan.isGroup(near.left)) ||
+      (near.right !== undefined && plan.isGroup(near.right))
+        ? metrics.groupGap
+        : metrics.gap
     if (leftEdge && rightEdge) sep.push(after(leftEdge, rightEdge, gap))
     const frameKeyHere = node.frame === ROOT ? undefined : frameKey(node.frame)
     const firstKey = runs[0]
@@ -164,12 +146,7 @@ export type WidthsPlan = Parameters<typeof columnWidths>[0] &
 
 /** The separations the widths are made of: columns, siblings, and the ports along the tops. */
 export function layWidths(plan: WidthsPlan, xAxis: Axis): Constraints {
-  return join(
-    columnWidths(plan, xAxis),
-    siblingsApart(plan, xAxis),
-    portChain(plan, xAxis, 'x'),
-    framePorts(plan, xAxis),
-  )
+  return join(columnWidths(plan, xAxis), siblingsApart(plan, xAxis), portChain(plan, xAxis, 'x'))
 }
 
 /** The steps of each line from one x to the next. */

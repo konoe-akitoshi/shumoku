@@ -69,8 +69,7 @@ export function foldsOf(
   const fans = new Map<string, ItemId[]>()
   for (const item of problem.items) {
     const above = uppers.get(item.id)
-    // a portal is a point on the edge of a leaf group, not a box to deal into rows
-    if (!above || handsOn.has(item.id) || tied.has(item.id) || item.kind === 'portal') continue
+    if (!above || handsOn.has(item.id) || tied.has(item.id)) continue
     const rank = ranks.rank.get(item.id)
     if (rank === undefined) continue
     const key = JSON.stringify([item.frame, rank, [...new Set(above)].sort(compare)])

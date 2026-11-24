@@ -70,37 +70,7 @@ export interface UnitItem extends ItemBase {
   hullKind?: string
 }
 
-/**
- * A leaf group solved on its own (`nest.ts`) and standing in its parent as one box of a size the
- * solving settled. Its ports are on its top and bottom edges, at the places the lines of the
- * group were left at: `along` is the distance from the box's left edge, and the ports keep it.
- */
-export interface FrameItem extends ItemBase {
-  kind: 'frame'
-  /** The group it stands for. */
-  group: FrameId
-  /** What the box is drawn as, when it is drawn as a group. */
-  subgraph?: Subgraph
-  /** What the group keeps clear round its contents; the box is the contents and these. */
-  insets: Insets
-  /** By port name (a line's `<id>.<a|b>`), the edge the line meets the box by and its place along it. */
-  ports: Readonly<Record<string, { side: 'top' | 'bottom'; along: number }>>
-}
-
-/**
- * Where a line that leaves a leaf group meets the group's top or bottom edge, as the group is
- * solved: a point of no size that the line runs to, which a group's solving puts in the first
- * row (`top`) or the last (`bottom`). Not drawn.
- */
-export interface PortalItem extends ItemBase {
-  kind: 'portal'
-  side: 'top' | 'bottom'
-  /** The line it ends, and the end of it. */
-  line: string
-  end: 'a' | 'b'
-}
-
-export type Item = NodeItem | UnitItem | FrameItem | PortalItem
+export type Item = NodeItem | UnitItem
 
 /**
  * `oriented`: the structure gives the two ends a relation, one above the other or level, so the
