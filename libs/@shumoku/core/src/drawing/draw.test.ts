@@ -280,3 +280,36 @@ describe('a boundary the drawing layer names', () => {
     expect(scene.wires).toHaveLength(2)
   })
 })
+
+describe('redundancy sets cabled at one height', () => {
+  it('draws two sets cabled to each other, and a set a tunnel also reaches, with nothing left out', () => {
+    const model = readNetworkModel(`
+redundancy:
+  - { id: pa, nodes: [a1, a2, a3] }
+  - { id: pb, nodes: [b1, b2, b3] }
+nodes:
+  - { id: top, type: external }
+  - { id: sw, type: l2-switch }
+  - { id: a1 }
+  - { id: a2 }
+  - { id: a3 }
+  - { id: b1 }
+  - { id: b2 }
+  - { id: b3 }
+links:
+  - endpoints: [{ node: top }, { node: sw }]
+  - endpoints: [{ node: sw, port: p1 }, { node: a1 }]
+  - endpoints: [{ node: sw, port: p2 }, { node: a2 }]
+  - endpoints: [{ node: sw, port: p3 }, { node: a3 }]
+  - endpoints: [{ node: sw, port: p4 }, { node: b1 }]
+  - endpoints: [{ node: sw, port: p5 }, { node: b2 }]
+  - endpoints: [{ node: sw, port: p6 }, { node: b3 }]
+  - endpoints: [{ node: a2, port: x }, { node: b2, port: x }]
+  - endpoints: [{ node: sw, port: t }, { node: a2, port: t }]
+    virtual: true
+`)
+    const scene = drawNetwork(model, { metrics: () => testMetrics })
+    expect(scene.issues).toBeUndefined()
+    expect(scene.wires).toHaveLength(9)
+  })
+})

@@ -32,6 +32,11 @@ export interface Routes {
    * it, so it is left out and named here rather than stopping the drawing.
    */
   unrouted: readonly string[]
+  /**
+   * The lines left out after the coordinates found their places in a ring with the rest, every
+   * relaxation tried (`placeBending`), by id; none from the routing itself.
+   */
+  cyclic: readonly string[]
 }
 
 /** The frames a line may be in without cost: those that hold either of its ends. */
@@ -289,7 +294,7 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     }
     routes.set(line.id, forward ? route : reversed(route))
   }
-  return { routes, unrouted }
+  return { routes, unrouted, cyclic: [] }
 
   function reversed(r: Route): Route {
     return {

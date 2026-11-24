@@ -120,8 +120,10 @@ export function kickDerivation(topologyId: string, svc: TopologyService): Promis
         // the drawing is whole but for what it names; say so where an operator looks
         const issues = msg.scene.issues ?? []
         if (issues.length > 0) {
+          const end = (e: { node: string; port?: string }) =>
+            e.port ? `${e.node}:${e.port}` : e.node
           const what = issues.map((i) =>
-            'link' in i ? `${i.code} ${i.link.id ?? ''}` : `${i.code} ${i.id}`,
+            'link' in i ? `${i.code} ${end(i.link.from)}–${end(i.link.to)}` : `${i.code} ${i.id}`,
           )
           console.warn(
             `[derivation] ${topologyId}: drawn with ${issues.length} issue(s): ${what.join(', ')}`,

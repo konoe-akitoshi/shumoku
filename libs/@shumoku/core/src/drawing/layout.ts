@@ -12,10 +12,11 @@ import { type Corridors, corridorsOf } from './corridors.js'
 import { diagonalsOf } from './diagonals.js'
 import { foldsOf } from './fold.js'
 import { type Placed, placeAll } from './geometry.js'
+import { varKey } from './keys.js'
 import { type Layers, layersOf } from './layers.js'
 import { heldLevels, levelClasses } from './level.js'
 import type { Metrics } from './metrics.js'
-import { InvariantError } from './must.js'
+import { InvariantError, must } from './must.js'
 import { needsOf } from './needs.js'
 import { type Problem, readProblem } from './problem.js'
 import { type Ranks, ranksOf } from './ranks.js'
@@ -115,9 +116,9 @@ export function layoutParts(
   const layers = timed('layers', () => layersOf(problem, ranks, { order, under: folds.under }))
   const arrangement = arrangementOf(problem, ranks, layers, intent)
   const corridors = timed('corridors', () => corridorsOf(problem, layers))
-  const routes = timed('routes', () => routesOf(problem, layers, corridors))
-  const { tracks, sized, placed, left } = timed('geometry', () =>
-    placeBending(problem, ranks, layers, corridors, routes),
+  const walked = timed('routes', () => routesOf(problem, layers, corridors))
+  const { tracks, sized, placed, routes } = timed('geometry', () =>
+    placeBending(problem, ranks, layers, corridors, walked),
   )
   const turns = timed('diagonals', () =>
     diagonalsOf(sized, placed.geometry, placed.wires, placed.ports),
@@ -129,13 +130,16 @@ export function layoutParts(
     layers.members,
   )
   const linkOf = new Map(problem.lines.map((l) => [l.id, l.link]))
-  const issues = [
-    ...routes.unrouted.map((id) => ({ code: 'no-route' as const, id })),
-    ...left.map((id) => ({ code: 'constraint-cycle' as const, id })),
-  ].flatMap(({ code, id }): DrawingIssue[] => {
-    const link = linkOf.get(id)
-    return link ? [{ code, link }] : []
-  })
+  const issues: DrawingIssue[] = [
+    ...routes.unrouted.map((id) => ({
+      code: 'no-route' as const,
+      link: must(linkOf, id, 'link of line'),
+    })),
+    ...routes.cyclic.map((id) => ({
+      code: 'constraint-cycle' as const,
+      link: must(linkOf, id, 'link of line'),
+    })),
+  ]
   const scene = issues.length > 0 ? { ...assembled, issues } : assembled
   return {
     scene,
@@ -176,7 +180,7 @@ function placeBending(
   loose: ReadonlySet<string> = new Set(),
   flipped: ReadonlySet<string> = new Set(),
   attempt = 0,
-): { tracks: Tracks; sized: Problem; placed: Placed; left: readonly string[] } {
+): { tracks: Tracks; sized: Problem; placed: Placed; routes: Routes } {
   const tracks = tracksOf(problem, layers, corridors, routes, { bent, flipped })
   const sized = needsOf(problem, tracks)
   const straight = sized.lines.flatMap((l): [string, string][] =>
@@ -185,16 +189,15 @@ function placeBending(
   const held =
     loose.size === 0 ? sized : { ...sized, level: heldLevels(sized.level, straight, loose) }
   try {
-    return { tracks, sized, placed: placeAll(held, ranks, layers, corridors, tracks), left: [] }
+    return { tracks, sized, placed: placeAll(held, ranks, layers, corridors, tracks), routes }
   } catch (e) {
     if (!(e instanceof CycleError)) throw e
-    const ports = new Map([...tracks.entities.values()].map((p) => [String(p.id), p]))
-    const lines = new Set<string>()
-    for (const name of e.unknowns) {
-      const port = /^[xy] p:(.*)$/.exec(name)?.[1]
-      for (const end of (port === undefined ? undefined : ports.get(port))?.ends ?? [])
-        lines.add(end.line)
-    }
+    // the lines the ring runs through: those whose chains hold its unknowns, ports and lanes alike
+    // (an unknown is named for its axis and then its coordinate, `x p:...` or `y l:...`)
+    const linesOfVar = new Map<string, string[]>()
+    for (const [line, chain] of tracks.chains)
+      for (const v of chain) linesOfVar.set(varKey(v), [...(linesOfVar.get(varKey(v)) ?? []), line])
+    const lines = new Set(e.unknowns.flatMap((name) => linesOfVar.get(name.slice(2)) ?? []))
     const again = (next: {
       routes?: Routes
       bent?: ReadonlySet<string>
@@ -236,10 +239,7 @@ function placeBending(
     const kept = new Map([...routes.routes].filter(([id]) => !lines.has(id)))
     if (kept.size === routes.routes.size)
       throw new InvariantError(`a ring of separations that no line closes: ${e.message}`)
-    const rest = again({ routes: { ...routes, routes: kept } })
-    return {
-      ...rest,
-      left: [...routes.routes.keys()].filter((id) => !kept.has(id)).concat(rest.left),
-    }
+    const left = [...routes.routes.keys()].filter((id) => !kept.has(id))
+    return again({ routes: { ...routes, routes: kept, cyclic: [...routes.cyclic, ...left] } })
   }
 }

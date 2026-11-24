@@ -1272,6 +1272,13 @@ function flipScene(scene: DrawingScene, maps: FlipMaps): DrawingScene {
     ...(scene.hulls && {
       hulls: scene.hulls.map((h) => ({ ...h, members: h.members.map((m) => mapNodeId(maps, m)) })),
     }),
+    ...(scene.issues && {
+      issues: scene.issues.map((i) => {
+        if (!('link' in i)) return i
+        const newId = maps.linkEntityByEndpoints.get(endpointSignature(i.link.from, i.link.to))
+        return { ...i, link: flipEmbeddedLink(i.link, newId, maps) }
+      }),
+    }),
   }
 }
 

@@ -463,16 +463,17 @@ export function readProblem(
    * they are each other's equals and stand side by side, except a redundancy set and what is
    * cabled to it: the set's members already stand side by side in a row, which leaves no side to
    * meet anything else by but the row's two ends, so what is cabled to it at its own height (the
-   * switch its members all use, say) stands above it. A virtual line (a tunnel to a branch) leaves
-   * the set by a side as before.
+   * switch its members all use, say) stands above it, and of two sets cabled to each other the
+   * first by id. A virtual line (a tunnel to a branch) is not held so; one to a member between two
+   * others finds no way and is named in the drawing's issues.
    */
   const aboveOf = (a: ItemId, b: ItemId, cabled: boolean): Above | undefined => {
     const [ta, tb] = [tierOfItem.get(a), tierOfItem.get(b)]
     if (ta !== undefined && tb !== undefined && ta !== tb)
       return ta < tb ? { upper: a, lower: b } : { upper: b, lower: a }
-    if (cabled && isUnit.has(a) !== isUnit.has(b))
-      return isUnit.has(a) ? { upper: b, lower: a } : { upper: a, lower: b }
-    return undefined
+    if (!cabled || (!isUnit.has(a) && !isUnit.has(b))) return undefined
+    const aFirst = isUnit.has(a) === isUnit.has(b) ? compare(a, b) <= 0 : isUnit.has(b)
+    return aFirst ? { upper: a, lower: b } : { upper: b, lower: a }
   }
   const dropped: Above[] = []
   const planes = [...structure.planes].sort(
@@ -505,7 +506,10 @@ export function readProblem(
       else aboveSeen.set(joinKey([edge.upper, edge.lower]), edge)
     }
   }
-  const levels = [...levelSeen.values()].sort((p, q) => compare(p.a, q.a) || compare(p.b, q.b))
+  // a direction one plane gives outranks a tie another plane leaves (a cable over a tunnel)
+  const levels = [...levelSeen.values()]
+    .filter(({ a, b }) => !aboveSeen.has(joinKey([a, b])) && !aboveSeen.has(joinKey([b, a])))
+    .sort((p, q) => compare(p.a, q.a) || compare(p.b, q.b))
   const aboveAll = [...aboveSeen.values()].sort(
     (p, q) => compare(p.upper, q.upper) || compare(p.lower, q.lower),
   )

@@ -65,7 +65,7 @@ function boundaryNamed(model: NetworkModel): { known: string[]; unknown: string[
   ])
   return {
     known: chosen.filter((id) => onLines.has(id)),
-    unknown: chosen.filter((id) => !onLines.has(id)),
+    unknown: [...new Set(chosen.filter((id) => !onLines.has(id)))],
   }
 }
 
