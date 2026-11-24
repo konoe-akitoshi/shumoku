@@ -153,13 +153,13 @@ exports[`the drawing of fixed networks > fixtures/aggregate-addresses-unpaired.y
 exports[`the drawing of fixed networks > fixtures/as-border.yaml 1`] = `
 {
   "bounds": {
-    "height": 150,
-    "width": 690,
+    "height": 230,
+    "width": 520,
     "x": 0,
     "y": 0,
   },
   "groups": 1,
-  "hash": "ea69db8209fcbff0",
+  "hash": "56bb889c8434b75d",
   "nodes": 6,
   "wires": 3,
 }
@@ -468,13 +468,13 @@ exports[`the drawing of fixed networks > fixtures/shared-segment-no-vlan.yaml 1`
 exports[`the drawing of fixed networks > fixtures/shownet-external.yaml 1`] = `
 {
   "bounds": {
-    "height": 278,
-    "width": 1514.0000000000002,
+    "height": 224,
+    "width": 1494.0000000000002,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "570437ee2f8e2708",
+  "hash": "0604d4832eff45fa",
   "nodes": 22,
   "wires": 20,
 }
@@ -679,12 +679,12 @@ exports[`the drawing of fixed networks > sample 1`] = `
 {
   "bounds": {
     "height": 752,
-    "width": 1140,
+    "width": 1010,
     "x": 0,
     "y": 0,
   },
   "groups": 9,
-  "hash": "cfdb2332d5a3c212",
+  "hash": "623b7333b4831024",
   "nodes": 20,
   "wires": 22,
 }

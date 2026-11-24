@@ -15,10 +15,11 @@ import { isTopTier, TIERS, tierOfType } from './tiers.js'
  * - the kind of node, by how near the way out a network usually puts it (`TIERS`);
  * - the fastest link a node ends, the backbone being faster than the edge;
  * - every node.
- * Of those, the most central are the top (the nodes from which the farthest node is nearest): a
- * part has one top, and its other routers hang from it. Taking every router as the top put them
- * all on the top row, the lines between them running sideways. Nodes nothing tells apart (two
- * equally central) are all kept: which of them is above would be a guess.
+ * Of those, the most central are the top (the nodes from which the farthest node is nearest), and
+ * of those the ones with the most links, cabled or not (a border router with its peerings over
+ * the router of the AS beyond): a part has one top, and the rest hang from it. Taking every router
+ * as the top put them all on the top row, the lines between them running sideways. Nodes nothing
+ * tells apart are all kept: which of them is above would be a guess.
  *
  * A signal tells nodes apart only when some node of the part has it and some node does not
  * share its best value; then the next one is asked.
@@ -31,7 +32,8 @@ export function upstreamOf(network: input.Network, named: readonly string[]): st
     const nodes = part.filter((v) => graph.isNode.has(v))
     if (nodes.length < 2 || part.some((v) => taken.has(v))) continue
     const picked = byLadder(network, nodes) ?? bySpeed(network, nodes) ?? nodes
-    out.push(...centreOf(graph, part, picked))
+    const centre = centreOf(graph, part, picked)
+    out.push(...(busiest(network, centre) ?? centre))
   }
   return out
 }
@@ -44,6 +46,17 @@ function byLadder(network: input.Network, nodes: readonly string[]): string[] | 
     return tier !== undefined && isTopTier(tier) ? tier : TIERS.length
   }
   return best(nodes, (id) => -rung(id), -TIERS.length)
+}
+
+/** Of `nodes`, those with the most links of any kind, where that tells them apart. */
+function busiest(network: input.Network, nodes: readonly string[]): string[] | undefined {
+  const links = new Map<string, number>()
+  for (const link of network.links) {
+    for (const end of link.endpoints) {
+      if ('node' in end) links.set(end.node, (links.get(end.node) ?? 0) + 1)
+    }
+  }
+  return best(nodes, (id) => links.get(id) ?? 0, 0)
 }
 
 /** A rate in bits per second; `10G` is ten thousand million. */
