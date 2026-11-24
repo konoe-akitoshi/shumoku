@@ -2,11 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { hasAlertsCapability } from '@shumoku/core'
 import { register as registerGrafana } from 'shumoku-plugin-grafana'
 import { createDataSourceOperationsService } from '../../src/app/data-source-operations.ts'
 import { createShareApplicationService } from '../../src/app/share.ts'
 import { createWebhookApplicationService } from '../../src/app/webhooks.ts'
+import { getDatabase } from '../../src/db/index.ts'
 import { pluginRegistry } from '../../src/plugins/registry.ts'
+import { AlertCollector } from '../../src/services/alert-collector.ts'
 import { DashboardService } from '../../src/services/dashboard.ts'
 import { DataSourceService } from '../../src/services/datasource.ts'
 import { GrafanaAlertService } from '../../src/services/grafana-alerts.ts'
@@ -62,10 +65,23 @@ describe('alerts pushed by a Grafana webhook', () => {
     })
     expect(pushed).toMatchObject({ ok: true, value: { alertCount: 1 } })
 
-    // GET /api/datasources/:id/alerts
-    const operations = createDataSourceOperationsService(dataSources, {
-      ingestAlerts: async () => {},
+    // the Server's collection polls the plugin it makes for the source, as it does every source
+    const collector = new AlertCollector({
+      db: getDatabase(),
+      listSources: () => [source.id],
+      exists: () => true,
+      intervalMs: () => 60_000,
+      fetchAlerts: async (id) => {
+        const plugin = await dataSources.getPlugin(id)
+        if (!plugin || !hasAlertsCapability(plugin)) throw new Error('no alerts capability')
+        return plugin.getAlerts({ activeOnly: true })
+      },
     })
+    collector.syncSources()
+    await collector.refresh(source.id)
+
+    // GET /api/datasources/:id/alerts
+    const operations = createDataSourceOperationsService(dataSources, collector)
     const alerts = await operations.getAlerts(source.id, {})
     expect(alerts?.map((a) => a.id)).toEqual(['fp-1'])
     expect(alerts?.[0]).toMatchObject({ severity: 'critical', status: 'active' })
@@ -81,6 +97,7 @@ describe('alerts pushed by a Grafana webhook', () => {
       topologies: {} as TopologyService,
       dashboards,
       dataSources,
+      alerts: collector,
     })
     const shared = await share.dashboardAlerts(token, source.id, {})
     expect(shared.ok).toBe(true)

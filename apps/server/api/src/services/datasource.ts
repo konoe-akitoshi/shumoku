@@ -5,7 +5,7 @@ import { fetchSourceTopology } from './source-topology.js'
  */
 
 import type { Database } from 'bun:sqlite'
-import type { DataSourcePlugin, SourceNetwork } from '@shumoku/core'
+import type { Alert, AlertQueryOptions, DataSourcePlugin, SourceNetwork } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import { DEEP_READ_TYPE, DeepReadSource } from '../plugins/deep-read-source.js'
 import {
