@@ -26,6 +26,12 @@ export interface Route {
 
 export interface Routes {
   routes: ReadonlyMap<string, Route>
+  /**
+   * The lines no way was found for, by id, in the order of the lines. The input can ask for one
+   * (a line to a side the corridors give no door on); the rest of the drawing does not depend on
+   * it, so it is left out and named here rather than stopping the drawing.
+   */
+  unrouted: readonly string[]
 }
 
 /** The frames a line may be in without cost: those that hold either of its ends. */
@@ -219,7 +225,8 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     return undefined
   }
 
-  for (const line of problem.lines) {
+  const unrouted: string[] = []
+  lines: for (const line of problem.lines) {
     const sides = sidesByRank(line, rank)
     if (!sides) continue
     const allowed = allowedFrames(problem, line)
@@ -249,7 +256,10 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
         c === undefined
           ? search(begin, (n, w) => targets.has(state0(n, w)), allowed, only)
           : search(begin, (n, w) => n === c && w === 'top', allowed, only)
-      if (!leg) throw new Error(`no way through the corridors for ${line.id}`)
+      if (!leg) {
+        unrouted.push(line.id)
+        continue lines
+      }
       legs.push(leg)
       if (c !== undefined) {
         begin = [{ node: c, wall: 'top' }]
@@ -279,7 +289,7 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     }
     routes.set(line.id, forward ? route : reversed(route))
   }
-  return { routes }
+  return { routes, unrouted }
 
   function reversed(r: Route): Route {
     return {

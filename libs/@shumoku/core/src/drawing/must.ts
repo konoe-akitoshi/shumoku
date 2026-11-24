@@ -8,14 +8,23 @@
  * plausible picture from a wrong key, so a miss stops the drawing and names the key instead.
  */
 
+/**
+ * A failure of the engine itself: a stage missed what an earlier one made, or reached a branch it
+ * cannot. Never the input's doing, which the drawing reports as an issue (`Scene.issues`) and draws
+ * on; this stops the drawing so the fault is found, not hidden in a plausible picture.
+ */
+export class InvariantError extends Error {
+  override name = 'InvariantError'
+}
+
 /** The value a map holds for a key that must be there. */
 export function must<K, V>(map: ReadonlyMap<K, V>, key: K, what: string): V {
   const found = map.get(key)
-  if (found === undefined) throw new Error(`${what}: no ${String(key)}`)
+  if (found === undefined) throw new InvariantError(`${what}: no ${String(key)}`)
   return found
 }
 
 /** Where a branch cannot be reached; for exhaustive checks on a union. */
 export function assertNever(value: never, what: string): never {
-  throw new Error(`${what}: unexpected ${JSON.stringify(value)}`)
+  throw new InvariantError(`${what}: unexpected ${JSON.stringify(value)}`)
 }

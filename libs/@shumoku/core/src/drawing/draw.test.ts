@@ -267,3 +267,16 @@ links:
     expect(scene.ports?.find((p) => p.nodeId === 'h2' && p.name === 'nic1')?.side).toBe('top')
   })
 })
+
+describe('a boundary the drawing layer names', () => {
+  it('reports one that names nothing on a line and draws from the rest', () => {
+    const model = readNetworkModel(wan)
+    const named = {
+      ...model,
+      drawing: { ...model.drawing, settings: { boundary: ['nope', 'wan'] } },
+    }
+    const scene = drawNetwork(named, { metrics: () => testMetrics })
+    expect(scene.issues).toEqual([{ code: 'unknown-boundary', id: 'nope' }])
+    expect(scene.wires).toHaveLength(2)
+  })
+})

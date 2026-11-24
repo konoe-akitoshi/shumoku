@@ -117,6 +117,16 @@ export function kickDerivation(topologyId: string, svc: TopologyService): Promis
         return
       }
       if (msg.type === 'result') {
+        // the drawing is whole but for what it names; say so where an operator looks
+        const issues = msg.scene.issues ?? []
+        if (issues.length > 0) {
+          const what = issues.map((i) =>
+            'link' in i ? `${i.code} ${i.link.id ?? ''}` : `${i.code} ${i.id}`,
+          )
+          console.warn(
+            `[derivation] ${topologyId}: drawn with ${issues.length} issue(s): ${what.join(', ')}`,
+          )
+        }
         try {
           svc.completeDerivation(topologyId, startedRevision, msg)
         } catch (err) {

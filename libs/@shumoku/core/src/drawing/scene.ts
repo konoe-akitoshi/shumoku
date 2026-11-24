@@ -55,5 +55,25 @@ export interface Scene {
    * not as wires: by the host they run inside, so a viewer can still find and show them.
    */
   inner?: { link: Link; host: string }[]
+  /**
+   * What the drawing could not do as the input asked, and did instead; absent when it did all of
+   * it. The rest of the drawing is whole. A failure of the engine itself (a stage missing what an
+   * earlier one made) is not an issue: it throws.
+   */
+  issues?: DrawingIssue[]
   bounds: Box
 }
+
+/**
+ * Something the input asked for that the drawing could not give, by a code a viewer can show and
+ * a test can pin:
+ * - `no-route`: the corridors give the line no way between its ends (a side with no door); the
+ *   line is not drawn.
+ * - `constraint-cycle`: the places its ends ask for close a ring with the others, after levels
+ *   were let go, lines bent and bundles turned; the line is not drawn.
+ * - `unknown-boundary`: a boundary named in the drawing layer is no node, segment or routing
+ *   domain; it is not measured from.
+ */
+export type DrawingIssue =
+  | { code: 'no-route' | 'constraint-cycle'; link: Link }
+  | { code: 'unknown-boundary'; id: string }

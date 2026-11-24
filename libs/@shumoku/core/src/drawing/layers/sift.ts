@@ -4,6 +4,7 @@
 
 import { compare, joinKey } from '../../structure/keys.js'
 import { dummyIn, dummyKey, frameIn, frameKey, hasDummy } from '../keys.js'
+import { InvariantError } from '../must.js'
 import type { FrameId } from '../problem.js'
 import type { Judge } from './cost.js'
 import { spanOfKey, total } from './cost.js'
@@ -398,7 +399,9 @@ const costsAgain = (judge: Judge, cost: Costs, tf: Flat, changed: ReadonlySet<nu
 
 const agree = (fast: Costs, slow: Costs) => {
   if (JSON.stringify(fast) !== JSON.stringify(slow))
-    throw new Error(`incremental costs differ: ${JSON.stringify(fast)} ${JSON.stringify(slow)}`)
+    throw new InvariantError(
+      `incremental costs differ: ${JSON.stringify(fast)} ${JSON.stringify(slow)}`,
+    )
 }
 
 /** What sifting reads: the rows, the problem as looked up, and the hints that pin a child. */

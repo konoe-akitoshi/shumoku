@@ -4,7 +4,7 @@
 
 import { type AxisInput, CycleError, midpoint, packEarly, packLate, solveAxis } from '../axis.js'
 import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
-import { must } from '../must.js'
+import { InvariantError, must } from '../must.js'
 import { gapsOf, marginsOf } from '../ports.js'
 import { type FrameId, ROOT } from '../problem.js'
 import type { Var } from '../tracks.js'
@@ -103,7 +103,9 @@ export function axisOf(
   let sealed = false
   const alloc = (name: string) => {
     if (sealed)
-      throw new Error(`the ${axis} axis was asked for an unknown it has not numbered: ${name}`)
+      throw new InvariantError(
+        `the ${axis} axis was asked for an unknown it has not numbered: ${name}`,
+      )
     names.push(name)
     return names.length - 1
   }
