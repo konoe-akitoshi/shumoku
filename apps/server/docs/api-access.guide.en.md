@@ -8,7 +8,7 @@ slug: server/api-access
 status: stable
 audience: operator
 owner: server
-canonicalDigest: 9ca66785ed158e0e9faf4778a49e142626773a648d21e1009068fe874e7df274
+canonicalDigest: 39b89ad2d77f0b931168f14eba898ab852e497fec7d1dbcc48211e481891b807
 related:
   - /en/reference/server
 ---

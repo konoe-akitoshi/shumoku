@@ -53,6 +53,12 @@ export function apiTokenSubject(id: string): string {
   return `api-token:${id}`
 }
 
+/**
+ * SHA-256, deliberately not a slow password hash (argon2 / bcrypt). A slow hash protects
+ * low-entropy, human-chosen passwords from guessing; this secret is 256 random bits, which
+ * no amount of guessing reaches. A fast, deterministic digest is what lets a token be found
+ * by one indexed lookup on every request, as GitHub and Stripe tokens are.
+ */
 function digest(secret: string): string {
   return createHash('sha256').update(secret).digest('hex')
 }
