@@ -11,7 +11,7 @@ import { networkOf, testMetrics } from './testing/support.js'
 import { tracksOf } from './tracks.js'
 
 /**
- * Two switches level with each other, `f` left of `l`, joined by four lines. `l` also has a line to
+ * Two switches of one type level with each other, `f` left of `l`, joined by four lines. `l` also has a line to
  * each of four peers further left (`p0`..`p3`), which leave `l` by its left side above the four,
  * climb over `f` and come down to them. So `l`'s ends of the four stand lower on it than `f`'s do
  * on `f`, and the middles of the two cannot stand level while the four run straight across.
@@ -20,7 +20,7 @@ const yaml = `
 nodes:
   - { id: r, type: router }
   - { id: f, type: l2-switch }
-  - { id: l, type: l3-switch }
+  - { id: l, type: l2-switch }
   - { id: p0, type: l2-switch }
   - { id: p1, type: l2-switch }
   - { id: p2, type: l2-switch }

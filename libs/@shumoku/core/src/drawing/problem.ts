@@ -452,8 +452,19 @@ export function readProblem(
   // ---- above and level, physical first so that a virtual direction that contradicts it is the
   // one dropped
   const aboveSeen = new Map<string, Above>()
-  const dropped: Above[] = []
   const levelSeen = new Map<string, Level>()
+  const tierOfItem = new Map(items.map((i) => [i.id, tierOf(i)]))
+  /**
+   * Of two ends the structure finds as far from the boundary, the one that stands above: the one
+   * of the nearer tier (`TIERS`). Where the types tell them no apart (one tier, or a type missing),
+   * they are each other's equals and stand side by side.
+   */
+  const aboveOf = (a: ItemId, b: ItemId): Above | undefined => {
+    const [ta, tb] = [tierOfItem.get(a), tierOfItem.get(b)]
+    if (ta === undefined || tb === undefined || ta === tb) return undefined
+    return ta < tb ? { upper: a, lower: b } : { upper: b, lower: a }
+  }
+  const dropped: Above[] = []
   const planes = [...structure.planes].sort(
     (a, b) => compare(a.side, b.side) || compare(a.plane, b.plane),
   )
@@ -466,12 +477,22 @@ export function readProblem(
       if (aboveSeen.has(joinKey([edge.lower, edge.upper]))) dropped.push(edge)
       else aboveSeen.set(joinKey([edge.upper, edge.lower]), edge)
     }
+    // Two ends as far from the boundary are not equals for that: the hop count ties by chance
+    // (a triangle always has one such side). Where what the ends are tells which is nearer the way
+    // out (`aboveOf`), the line runs down from it; only ends the types do not tell apart stand
+    // side by side.
     for (const [a, b] of plane.even) {
       const ia = vertexItem(a)
       const ib = vertexItem(b)
       if (ia === ib) continue
-      const [x, y] = compare(ia, ib) <= 0 ? [ia, ib] : [ib, ia]
-      levelSeen.set(joinKey([x, y]), { a: x, b: y })
+      const edge = aboveOf(ia, ib)
+      if (edge === undefined) {
+        const [x, y] = compare(ia, ib) <= 0 ? [ia, ib] : [ib, ia]
+        levelSeen.set(joinKey([x, y]), { a: x, b: y })
+        continue
+      }
+      if (aboveSeen.has(joinKey([edge.lower, edge.upper]))) dropped.push(edge)
+      else aboveSeen.set(joinKey([edge.upper, edge.lower]), edge)
     }
   }
   const levels = [...levelSeen.values()].sort((p, q) => compare(p.a, q.a) || compare(p.b, q.b))
@@ -516,6 +537,35 @@ export function readProblem(
     inner,
     boundary: structure.boundary.map(vertexItem),
   }
+}
+
+/**
+ * Device types by how near the way out of a network they stand, nearest first: of two linked
+ * devices the structure leaves level, the one of the nearer tier is drawn above.
+ */
+const TIERS: readonly (readonly string[])[] = [
+  ['internet', 'external', 'cloud'],
+  ['router'],
+  ['firewall', 'vpn', 'cpe'],
+  ['l3-switch', 'load-balancer'],
+  ['l2-switch'],
+  ['access-point'],
+  ['server', 'database', 'console-server'],
+]
+const tierOfType = new Map(TIERS.flatMap((types, tier) => types.map((t) => [t, tier] as const)))
+
+/**
+ * An item's tier (`TIERS`), from the type its nodes share; `undefined` where none is written or
+ * they differ, or for an item that is no device.
+ */
+function tierOf(item: Item): number | undefined {
+  const nodes =
+    item.kind === 'unit' ? item.members.map((m) => m.node) : item.kind === 'card' ? [item.node] : []
+  const tiers = new Set(
+    nodes.map((n) => (n.spec && 'type' in n.spec ? tierOfType.get(n.spec.type ?? '') : undefined)),
+  )
+  const [only] = tiers
+  return tiers.size === 1 ? only : undefined
 }
 
 /**
