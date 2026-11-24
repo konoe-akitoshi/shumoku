@@ -13,7 +13,11 @@ import type * as input from '../input/model.js'
  * the nodes the first of these tells apart, and nothing when the part is a single node:
  * - the kind of node, by how near the way out a network usually puts it (`LADDER`);
  * - the fastest link a node ends, the backbone being faster than the edge;
- * - the shape alone: the centre, the nodes from which the farthest node is nearest.
+ * - every node.
+ * Of those, the most central are the top (the nodes from which the farthest node is nearest): a
+ * part has one top, and its other routers hang from it. Taking every router as the top put them
+ * all on the top row, the lines between them running sideways. Nodes nothing tells apart (two
+ * equally central) are all kept: which of them is above would be a guess.
  *
  * A signal tells nodes apart only when some node of the part has it and some node does not
  * share its best value; then the next one is asked.
@@ -25,9 +29,8 @@ export function upstreamOf(network: input.Network, named: readonly string[]): st
   for (const part of partsOf(graph)) {
     const nodes = part.filter((v) => graph.isNode.has(v))
     if (nodes.length < 2 || part.some((v) => taken.has(v))) continue
-    out.push(
-      ...(byLadder(network, nodes) ?? bySpeed(network, nodes) ?? centreOf(graph, part, nodes)),
-    )
+    const picked = byLadder(network, nodes) ?? bySpeed(network, nodes) ?? nodes
+    out.push(...centreOf(graph, part, picked))
   }
   return out
 }
@@ -37,7 +40,8 @@ export function upstreamOf(network: input.Network, named: readonly string[]): st
  * beyond the network (internet, external, cloud) is named as a boundary before this is asked.
  */
 const LADDER: readonly (readonly string[])[] = [
-  ['router', 'firewall', 'vpn', 'cpe'],
+  ['router'],
+  ['firewall', 'vpn', 'cpe'],
   ['l3-switch', 'load-balancer'],
   ['l2-switch'],
   ['access-point'],
@@ -90,7 +94,7 @@ interface Graph {
 }
 
 /**
- * Nodes, segments and routing domains as one graph: a link joins its two ends, and a guest
+ * Nodes, segments and routing domains as one graph: a cable joins its two ends, and a guest
  * joins its host (the first node of a redundancy set it names).
  */
 function graphOf(network: input.Network): Graph {
@@ -102,7 +106,13 @@ function graphOf(network: input.Network): Graph {
   const idOf = (end: input.Endpoint) =>
     'node' in end ? end.node : 'segment' in end ? end.segment : end.routingDomain
   for (const node of network.nodes) next.set(node.id, next.get(node.id) ?? [])
-  for (const link of network.links) join(idOf(link.endpoints[0]), idOf(link.endpoints[1]))
+  // Up and down are measured over the cables (`orientPlanes`), so a part is what the cables join:
+  // a branch reached only by a tunnel, or switches whose uplinks are written as virtual, is a
+  // part of its own and has its own top, not none.
+  for (const link of network.links) {
+    if (link.virtual === true) continue
+    join(idOf(link.endpoints[0]), idOf(link.endpoints[1]))
+  }
   const firstOf = new Map((network.redundancy ?? []).map((r) => [r.id, r.nodes[0]]))
   for (const node of network.nodes) {
     const host = node.host === undefined ? undefined : (firstOf.get(node.host) ?? node.host)

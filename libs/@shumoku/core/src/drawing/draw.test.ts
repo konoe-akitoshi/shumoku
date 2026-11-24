@@ -143,17 +143,41 @@ describe('boundaryOf', () => {
     expect(boundaryOf(readNetworkModel(wan))).toEqual(['wan'])
   })
 
-  it('takes where the physical meets the virtual', () => {
+  it('does not take a node with a cable and a virtual link as the top', () => {
+    // a hypervisor with a VM: where the physical meets the virtual, but not the way out
     const model = readNetworkModel(`
 nodes:
-  - { id: a }
-  - { id: b }
-  - { id: c }
+  - { id: sw, type: l2-switch }
+  - { id: esx, type: server }
+  - { id: vm, type: server }
 links:
-  - endpoints: [{ node: a }, { node: b }]
-  - { endpoints: [{ node: b }, { node: c }], virtual: true }
+  - endpoints: [{ node: sw }, { node: esx }]
+  - { endpoints: [{ node: esx }, { node: vm }], virtual: true }
 `)
-    expect(boundaryOf(model)).toEqual(['b'])
+    expect(boundaryOf(model)).toEqual(['sw'])
+  })
+
+  it('takes one top of each part the cables join, the most central of its routers', () => {
+    // edge, core and branch are routers; core is the middle of the cabled part. The office is
+    // reached by a tunnel only, so it is a part of its own with its own top.
+    const model = readNetworkModel(`
+nodes:
+  - { id: edge, type: router }
+  - { id: fw, type: firewall }
+  - { id: core, type: router }
+  - { id: dist, type: l3-switch }
+  - { id: branch, type: router }
+  - { id: office, type: router }
+  - { id: office-sw, type: l2-switch }
+links:
+  - endpoints: [{ node: edge }, { node: fw }]
+  - endpoints: [{ node: fw }, { node: core }]
+  - endpoints: [{ node: core }, { node: dist }]
+  - endpoints: [{ node: core }, { node: branch }]
+  - { endpoints: [{ node: core }, { node: office }], virtual: true }
+  - endpoints: [{ node: office }, { node: office-sw }]
+`)
+    expect(boundaryOf(model)).toEqual(['core', 'office'])
   })
 
   it('takes the external node over where the physical meets the virtual', () => {

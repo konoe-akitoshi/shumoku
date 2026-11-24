@@ -26,15 +26,17 @@ export interface Drawing {
 }
 
 /** Node types that stand for what lies beyond the network. */
-const BEYOND = new Set(['external', 'cloud'])
+const BEYOND = new Set(['internet', 'external', 'cloud'])
 
 /**
  * Where the network meets what lies beyond it, as ids the structure can measure from. The
  * drawing layer's own choice comes first; else the external or cloud nodes and the routing domains
- * that links reach, what the input itself says is outside; else the structure's candidates (where
- * the physical meets the virtual). A part of the
- * network that none of these reaches gets its own guess (`upstreamOf`), so it still has an up
- * and a down.
+ * that links reach, what the input itself says is outside. A part of the network that none of
+ * these reaches gets its own guess (`upstreamOf`), so it still has an up and a down.
+ *
+ * Where the physical meets the virtual (a node with both a cable and a virtual link) is not taken
+ * as the top: a hypervisor with its VMs, a switch with a logical uplink and a router with a tunnel
+ * all are, and taking every one of them put them all on the top row.
  */
 export function boundaryOf(model: NetworkModel): string[] {
   const named = namedBoundaryOf(model)
@@ -45,20 +47,8 @@ function namedBoundaryOf(model: NetworkModel): string[] {
   const chosen = model.drawing?.settings?.boundary
   if (chosen && chosen.length > 0) return [...chosen]
   const network = model.config
-  // What the input says lies beyond the network is the top; only where it says nothing is the
-  // structure asked where the physical meets the virtual.
-  const outside = beyond(network)
-  if (outside.length > 0) return outside
-  const stages = deriveStages(network)
-  const units = new Map(stages.units.units.map((u) => [u.id, u]))
-  const candidates = stages.candidates.flatMap((ref) => {
-    const at = ref.indexOf(':')
-    const id = ref.slice(at + 1)
-    if (ref.slice(0, at) !== 'unit') return [id]
-    const member = units.get(id)?.members[0]
-    return member === undefined ? [] : [member]
-  })
-  return candidates
+  // What the input says lies beyond the network is the top.
+  return beyond(network)
 }
 
 function beyond(network: input.Network): string[] {
