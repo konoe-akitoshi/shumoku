@@ -22,8 +22,8 @@
       "bearerAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "256-bit development token",
-        "description": "Loopback-only development automation credential"
+        "bearerFormat": "shmk_ API token",
+        "description": "API token issued by an administrator (`shmk_…`), or the loopback-only development credential"
       },
       "webhookHeader": {
         "type": "apiKey",
@@ -3831,6 +3831,113 @@
         "required": [
           "status",
           "currentVersion"
+        ]
+      },
+      "ApiTokens": {
+        "type": "object",
+        "properties": {
+          "tokens": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApiToken"
+            }
+          }
+        },
+        "required": [
+          "tokens"
+        ]
+      },
+      "ApiToken": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "prefix": {
+            "type": "string",
+            "description": "First characters of the secret, for recognition"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "user",
+              "admin"
+            ]
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "expiresAt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lastUsedAt": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "prefix",
+          "role",
+          "createdAt",
+          "expiresAt",
+          "lastUsedAt"
+        ]
+      },
+      "CreateApiTokenResult": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The secret. Shown only in this response."
+          },
+          "apiToken": {
+            "$ref": "#/components/schemas/ApiToken"
+          }
+        },
+        "required": [
+          "token",
+          "apiToken"
+        ]
+      },
+      "CreateApiToken": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "viewer",
+              "user",
+              "admin"
+            ]
+          },
+          "expiresAt": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "exclusiveMinimum": 0,
+            "description": "Expiry as epoch milliseconds; omitted or null never expires"
+          }
+        },
+        "required": [
+          "name",
+          "role"
         ]
       },
       "AdminStatus": {
@@ -12821,6 +12928,173 @@
           }
         },
         "operationId": "getSystem"
+      }
+    },
+    "/admin/api-tokens": {
+      "get": {
+        "tags": [
+          "API tokens"
+        ],
+        "summary": "List API tokens",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API tokens, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTokens"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getAdminApiTokens"
+      },
+      "post": {
+        "tags": [
+          "API tokens"
+        ],
+        "summary": "Issue an API token; its secret is returned once",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApiToken"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "API token issued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateApiTokenResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postAdminApiTokens"
+      }
+    },
+    "/admin/api-tokens/{id}": {
+      "delete": {
+        "tags": [
+          "API tokens"
+        ],
+        "summary": "Revoke an API token",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API token revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ]
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "API token not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "deleteAdminApiTokensById"
       }
     },
     "/admin/status": {

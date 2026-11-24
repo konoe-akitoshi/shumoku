@@ -1530,6 +1530,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/api-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List API tokens */
+        get: operations["getAdminApiTokens"];
+        put?: never;
+        /** Issue an API token; its secret is returned once */
+        post: operations["postAdminApiTokens"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/api-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke an API token */
+        delete: operations["deleteAdminApiTokensById"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/status": {
         parameters: {
             query?: never;
@@ -2590,6 +2625,32 @@ export interface components {
             publishedAt?: string;
             checkedAt?: string;
             error?: string;
+        };
+        ApiTokens: {
+            tokens: components["schemas"]["ApiToken"][];
+        };
+        ApiToken: {
+            id: string;
+            name: string;
+            /** @description First characters of the secret, for recognition */
+            prefix: string;
+            /** @enum {string} */
+            role: "viewer" | "user" | "admin";
+            createdAt: number;
+            expiresAt: number | null;
+            lastUsedAt: number | null;
+        };
+        CreateApiTokenResult: {
+            /** @description The secret. Shown only in this response. */
+            token: string;
+            apiToken: components["schemas"]["ApiToken"];
+        };
+        CreateApiToken: {
+            name: string;
+            /** @enum {string} */
+            role: "viewer" | "user" | "admin";
+            /** @description Expiry as epoch milliseconds; omitted or null never expires */
+            expiresAt?: number | null;
         };
         AdminStatus: {
             /** @enum {string} */
@@ -8429,6 +8490,120 @@ export interface operations {
             };
             /** @description Authentication is required */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getAdminApiTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API tokens, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokens"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postAdminApiTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApiToken"];
+            };
+        };
+        responses: {
+            /** @description API token issued */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateApiTokenResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteAdminApiTokensById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API token revoked */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {boolean} */
+                        success: true;
+                    };
+                };
+            };
+            /** @description Authentication is required */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description API token not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -86,8 +86,9 @@ export function registerSecuritySchemes(app: OpenAPIHono): void {
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
     type: 'http',
     scheme: 'bearer',
-    bearerFormat: '256-bit development token',
-    description: 'Loopback-only development automation credential',
+    bearerFormat: 'shmk_ API token',
+    description:
+      'API token issued by an administrator (`shmk_…`), or the loopback-only development credential',
   })
   app.openAPIRegistry.registerComponent('securitySchemes', 'webhookHeader', {
     type: 'apiKey',

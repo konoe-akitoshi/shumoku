@@ -967,6 +967,33 @@ export const settings = {
   },
 }
 
+// API tokens (admin): Bearer credentials for automation such as Terraform
+export type ApiToken = components['schemas']['ApiToken']
+export type ApiTokenRole = ApiToken['role']
+
+export const apiTokens = {
+  list: async () => {
+    const { data, error, response } = await contractClient.GET('/admin/api-tokens')
+    if (!data) return contractError(error, response)
+    return data.tokens
+  },
+  /** Issue a token; the returned `token` is the secret, shown only once. */
+  create: async (input: { name: string; role: ApiTokenRole; expiresAt?: number | null }) => {
+    const { data, error, response } = await contractClient.POST('/admin/api-tokens', {
+      body: input,
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
+  revoke: async (id: string) => {
+    const { data, error, response } = await contractClient.DELETE('/admin/api-tokens/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
+}
+
 // Dashboards API
 export const dashboards = {
   list: async (): Promise<Dashboard[]> => {
@@ -1282,6 +1309,7 @@ export const credentials = {
 
 // Combined API export
 export const api = {
+  apiTokens,
   credentials,
   dashboards,
   dataSources,

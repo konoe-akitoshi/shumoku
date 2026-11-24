@@ -19,6 +19,23 @@ Content-Type: application/json
 
 See the [authentication guide](api-access.guide.en.md) and [SSO installation guide](installation.guide.en.md) for proxy mode, role mapping, and recovery. Proxy mode disables local login/setup/password changes and reports `authMethod: proxy`.
 
+### API tokens
+
+Automation such as Terraform, CI and scripts uses API tokens issued by an administrator.
+Issue one under "API Tokens" on the Settings page, or with `POST /api/admin/api-tokens`, giving a
+name, a role (`viewer` / `user` / `admin`) and an expiry. The token (a value starting with
+`shmk_`) is in the issuing response only; the Server stores just its hash.
+
+```
+GET /api/topologies
+Authorization: Bearer shmk_...
+```
+
+A token has its role's permissions; data sources, credentials and Settings need the `admin`
+role. Revoke a token you no longer need on the Settings page or with
+`DELETE /api/admin/api-tokens/:id`. Do not send it over plain HTTP: use it against a Server
+served over HTTPS. API tokens remain valid in proxy mode: configure the proxy to pass requests carrying `Authorization: Bearer` through to the Server instead of redirecting them to SSO (for example oauth2-proxy's `--skip-jwt-bearer-tokens`, or a route exclusion). When a request carries both a proxy identity and an API token, the token is used.
+
 ### Development automation
 
 When the Server is started from the repository with `bun run dev:server`, the
@@ -45,7 +62,7 @@ credential; use the server-level command above when automating API access.
 ### Machine-readable contract
 
 `GET /api/openapi.json` returns the OpenAPI 3.1 contract. It requires the same
-`workspace:read` permission through a local session, proxy identity, or development Bearer credential:
+`workspace:read` permission through a local session, proxy identity, API token, or development Bearer credential:
 
 ```bash
 bun run dev:server:request -- GET /api/openapi.json

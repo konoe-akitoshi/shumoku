@@ -1,6 +1,10 @@
 export const AUTH_ROLES = ['anonymous', 'viewer', 'user', 'admin'] as const
 export type AuthRole = (typeof AUTH_ROLES)[number]
 
+/** The roles a credential can be issued with: every role but anonymous. */
+export const ASSIGNABLE_ROLES = ['viewer', 'user', 'admin'] as const
+export type AssignableRole = (typeof ASSIGNABLE_ROLES)[number]
+
 export const AUTH_METHODS = ['anonymous', 'password', 'bearer', 'proxy'] as const
 export type AuthMethod = (typeof AUTH_METHODS)[number]
 

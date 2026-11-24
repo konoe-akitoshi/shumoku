@@ -12,6 +12,11 @@ function createService(overrides: Partial<AuthApplicationService> = {}): AuthApp
       role: 'admin' as const,
       authMethod: 'password' as const,
     })),
+    getApiTokenPrincipal: vi.fn((secret: string) =>
+      secret === `shmk_${'t'.repeat(43)}`
+        ? { subject: 'api-token:t1', role: 'user' as const, authMethod: 'bearer' as const }
+        : null,
+    ),
     setPassword: vi.fn(async () => undefined),
     setInitialPassword: vi.fn(async () => true),
     verifyPassword: vi.fn(async () => true),
@@ -64,6 +69,24 @@ describe('OpenAPI authentication routes', () => {
       permissions: ['workspace:read', 'workspace:write', 'admin:manage'],
       publicDemo: false,
     })
+  })
+
+  it('reports the principal of an API token, and anonymous for an unknown one', async () => {
+    const app = createApp(createService({ getSessionPrincipal: vi.fn(() => null) }))
+    const valid = await app.request('/auth/status', {
+      headers: { Authorization: `Bearer shmk_${'t'.repeat(43)}` },
+    })
+    expect(await valid.json()).toMatchObject({
+      authenticated: true,
+      subject: 'api-token:t1',
+      role: 'user',
+      authMethod: 'bearer',
+      permissions: ['workspace:read', 'workspace:write'],
+    })
+    const unknown = await app.request('/auth/status', {
+      headers: { Authorization: `Bearer shmk_${'u'.repeat(43)}`, Cookie: 'shumoku_session=s' },
+    })
+    expect(await unknown.json()).toMatchObject({ authenticated: false, role: 'anonymous' })
   })
 
   it('creates a session for a valid login', async () => {

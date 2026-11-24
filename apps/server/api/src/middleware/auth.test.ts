@@ -10,6 +10,14 @@ const authService = vi.hoisted(() => ({
   getSessionPrincipal: vi.fn((): import('../auth/principal.js').AuthPrincipal | null => null),
 }))
 
+const apiTokens = vi.hoisted(() => ({
+  getApiTokenPrincipal: vi.fn((): import('../auth/principal.js').AuthPrincipal | null => null),
+}))
+
+vi.mock('../services/api-tokens.js', () => ({
+  getApiTokenPrincipal: apiTokens.getApiTokenPrincipal,
+}))
+
 vi.mock('../services/auth.js', () => ({
   isSetupComplete: authService.isSetupComplete,
   getSessionPrincipal: authService.getSessionPrincipal,
@@ -162,6 +170,84 @@ describe('development API bearer authentication', () => {
     app.get('/api/topologies', (c) => c.json([{ id: 'topology-1' }]))
 
     expect((await app.request('/api/topologies')).status).toBe(401)
+  })
+})
+
+describe('API token authentication', () => {
+  const API_TOKEN = `shmk_${'x'.repeat(43)}`
+
+  afterEach(() => {
+    delete process.env['SHUMOKU_DEV_API_TOKEN']
+    delete process.env['HOST']
+    delete process.env['NODE_ENV']
+    delete process.env['SHUMOKU_PROXY_AUTH_ENABLED']
+    apiTokens.getApiTokenPrincipal.mockReset()
+    apiTokens.getApiTokenPrincipal.mockReturnValue(null)
+  })
+
+  function createApp() {
+    const app = new Hono()
+    app.use('/api/*', authMiddleware)
+    app.post('/api/topologies', (c) => c.json(getRequestPrincipal(c.req.raw)))
+    app.get('/api/settings', (c) => c.json({ sensitive: true }))
+    return app
+  }
+
+  it('authenticates a token in production and applies its role', async () => {
+    process.env['NODE_ENV'] = 'production'
+    apiTokens.getApiTokenPrincipal.mockReturnValue({
+      subject: 'api-token:t1',
+      role: 'user',
+      authMethod: 'bearer',
+    })
+    const app = createApp()
+    const headers = { Authorization: `Bearer ${API_TOKEN}` }
+
+    const write = await app.request('/api/topologies', { method: 'POST', headers })
+    expect(write.status).toBe(200)
+    expect(await write.json()).toMatchObject({ subject: 'api-token:t1', authMethod: 'bearer' })
+    expect(apiTokens.getApiTokenPrincipal).toHaveBeenCalledWith(API_TOKEN)
+
+    expect((await app.request('/api/settings', { headers })).status).toBe(403)
+  })
+
+  it('refuses an unknown token without trying the development credential', async () => {
+    process.env['NODE_ENV'] = 'development'
+    process.env['HOST'] = '127.0.0.1'
+    process.env['SHUMOKU_DEV_API_TOKEN'] = TOKEN
+    const response = await createApp().request('/api/settings', {
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
+    })
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({ message: 'Invalid or expired API token' })
+  })
+
+  it('is accepted in proxy mode, without any proxy identity header', async () => {
+    process.env['SHUMOKU_PROXY_AUTH_ENABLED'] = 'true'
+    apiTokens.getApiTokenPrincipal.mockReturnValue({
+      subject: 'api-token:t1',
+      role: 'admin',
+      authMethod: 'bearer',
+    })
+    const response = await createApp().request('/api/settings', {
+      headers: { Authorization: `Bearer ${API_TOKEN}` },
+    })
+    expect(response.status).toBe(200)
+    expect(apiTokens.getApiTokenPrincipal).toHaveBeenCalledWith(API_TOKEN)
+  })
+
+  it('takes precedence over a proxy identity on the same request', async () => {
+    process.env['SHUMOKU_PROXY_AUTH_ENABLED'] = 'true'
+    apiTokens.getApiTokenPrincipal.mockReturnValue({
+      subject: 'api-token:t1',
+      role: 'user',
+      authMethod: 'bearer',
+    })
+    const response = await createApp().request('/api/topologies', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${API_TOKEN}`, 'X-Auth-Request-User': 'alice' },
+    })
+    expect(await response.json()).toMatchObject({ subject: 'api-token:t1' })
   })
 })
 

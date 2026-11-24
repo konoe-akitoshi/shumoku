@@ -21,6 +21,7 @@ import type {
 import type { AuthPrincipal } from '../auth/principal.js'
 import type { Alert, AlertQueryOptions } from '../plugins/types.js'
 import type { AccessMethod } from '../services/access-methods.js'
+import type { ApiTokenRole, ApiTokenView } from '../services/api-tokens.js'
 import type {
   CredentialAdminView,
   CredentialEffect,
@@ -162,6 +163,8 @@ export interface SettingsApplicationService {
 export interface AuthApplicationService {
   isSetupComplete(): boolean
   getSessionPrincipal(token: string): AuthPrincipal | null
+  /** The principal an API token secret stands for, or null when unknown/revoked/expired. */
+  getApiTokenPrincipal(secret: string): AuthPrincipal | null
   setPassword(password: string): Promise<void>
   setInitialPassword(password: string): Promise<boolean>
   verifyPassword(password: string): Promise<boolean>
@@ -171,6 +174,18 @@ export interface AuthApplicationService {
   checkRateLimit(clientId: string): number
   recordFailedAttempt(clientId: string): void
   clearAttempts(clientId: string): void
+}
+
+/** API tokens: Bearer credentials for automation, issued and revoked by an administrator. */
+export interface ApiTokenApplicationService {
+  list(): ApiTokenView[]
+  /** Issue a token; `token` is the secret, returned only here. */
+  create(input: { name: string; role: ApiTokenRole; expiresAt?: number | null }): {
+    token: string
+    apiToken: ApiTokenView
+  }
+  /** Revoke a token; false when no such token exists. */
+  revoke(id: string): boolean
 }
 
 export interface PluginInfoView {
@@ -710,6 +725,7 @@ export interface AppServices {
     getStatus(): AdminStatus
   }
   auth: AuthApplicationService
+  apiTokens: ApiTokenApplicationService
   dataSources: DataSourceServices
   dashboards: DashboardApplicationService
   settings: SettingsApplicationService
