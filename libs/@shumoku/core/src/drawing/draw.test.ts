@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { readNetworkModel } from '../models/network-model-graph.js'
 import { boundaryOf, drawNetwork } from './draw.js'
+import { randomYaml } from './testing/random.js'
 import { testMetrics } from './testing/support.js'
 
 const wan = `
@@ -197,5 +198,34 @@ links:
   it('is overridden by the drawing layer alone', () => {
     const model = readNetworkModel(wan)
     expect(boundaryOf({ ...model, drawing: { settings: { boundary: ['sw'] } } })).toEqual(['sw'])
+  })
+})
+
+describe('a grouped network', () => {
+  it('is drawn whatever the shape, groups and types', () => {
+    for (const seed of Array.from({ length: 80 }, (_, i) => i + 1)) {
+      const model = readNetworkModel(randomYaml(seed, { grouped: true }))
+      expect(() => drawNetwork(model, { metrics: () => testMetrics }), `seed ${seed}`).not.toThrow()
+    }
+  })
+
+  it('keeps apart two legs in one gap where a line came in through a frame door', () => {
+    // the line from a to e reaches the gap above e along more than one row
+    const model = readNetworkModel(`
+groups: [{ id: g1 }, { id: g2 }]
+nodes:
+  - { id: top, type: router }
+  - { id: a, type: l2-switch, group: g1 }
+  - { id: b, type: l2-switch, group: g2 }
+  - { id: c, type: l2-switch, group: g2 }
+  - { id: d, type: server, group: g1 }
+  - { id: e, type: server, group: g2 }
+links:
+  - endpoints: [{ node: top }, { node: c }]
+  - endpoints: [{ node: a }, { node: e }]
+  - endpoints: [{ node: c }, { node: d }]
+  - endpoints: [{ node: a }, { node: d }]
+`)
+    expect(drawNetwork(model, { metrics: () => testMetrics }).wires).toHaveLength(4)
   })
 })

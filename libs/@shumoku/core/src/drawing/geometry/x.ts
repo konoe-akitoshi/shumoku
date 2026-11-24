@@ -4,7 +4,7 @@
 
 import { type AxisInput, solveAxis } from '../axis.js'
 import { jogLeastOf, pitchOf } from '../kin.js'
-import { ledgerOf } from '../ledger.js'
+import { type Ledger, ledgerOf } from '../ledger.js'
 import type { Var } from '../tracks.js'
 import { type AlignPlan, alignDown } from './align.js'
 import { balanceOf, portMiddlesOf } from './balance.js'
@@ -132,30 +132,32 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
  * and nothing in the widths keeps them apart, since the ports are on different boxes. So where
  * the solve put such a pair of legs nearer than the pitch of their lines, the leg from above is
  * kept a pitch to the side the other line comes from (its run passes over the leg, crossing it
- * once, as the two would cross anyway), where the rest of the drawing has room for it.
+ * once, as the two would cross anyway), where the rest of the drawing has room for it. The
+ * separations are held in `held`, as the alignments are, so what is solved after keeps them.
  */
-function legsApart(
-  plan: XPlan,
-  xAxis: Axis,
-  xValues: Float64Array,
-  held: ReturnType<typeof ledgerOf>,
-): Sep[] {
+function legsApart(plan: XPlan, xAxis: Axis, xValues: Float64Array, held: Ledger): Sep[] {
   const { tracks } = plan
-  type Leg = { line: string; port: Var; other: Var }
-  const fromAbove = new Map<number, Leg[]>()
-  const toBelow = new Map<number, Leg[]>()
-  const push = (m: Map<number, Leg[]>, node: number, leg: Leg) =>
-    m.set(node, [...(m.get(node) ?? []), leg])
+  const onX = (v: Var): boolean =>
+    v.kind === 'port'
+      ? tracks.entities.get(v.id)?.axis === 'x'
+      : tracks.lanes.get(v.key)?.axis === 'x'
+  /** A leg from a port above, and one to a port below with the last x its line had before it. */
+  type Down = { line: string; port: Var; from: Var | undefined }
+  const fromAbove = new Map<number, { line: string; port: Var }[]>()
+  const toBelow = new Map<number, Down[]>()
   for (const [line, chain] of tracks.chains) {
     for (const [i, v] of chain.entries()) {
       if (v.kind !== 'lane') continue
       const lane = tracks.lanes.get(v.key)
       if (lane?.axis !== 'y') continue
-      const [before, after_] = [chain[i - 1], chain[i + 1]]
-      if (before?.kind === 'port' && tracks.entities.get(before.id)?.side === 'bottom' && after_)
-        push(fromAbove, lane.node, { line, port: before, other: after_ })
-      if (after_?.kind === 'port' && tracks.entities.get(after_.id)?.side === 'top' && before)
-        push(toBelow, lane.node, { line, port: after_, other: before })
+      const [prev, next] = [chain[i - 1], chain[i + 1]]
+      if (prev?.kind === 'port' && tracks.entities.get(prev.id)?.side === 'bottom')
+        fromAbove.set(lane.node, [...(fromAbove.get(lane.node) ?? []), { line, port: prev }])
+      if (next?.kind === 'port' && tracks.entities.get(next.id)?.side === 'top') {
+        // the run may have come through a door of a frame first, along more than one row
+        const from = chain.slice(0, i).reverse().find(onX)
+        toBelow.set(lane.node, [...(toBelow.get(lane.node) ?? []), { line, port: next, from }])
+      }
     }
   }
   const x = (v: Var) => {
@@ -165,6 +167,7 @@ function legsApart(
   const out: Sep[] = []
   for (const [node, ups] of fromAbove) {
     for (const down of toBelow.get(node) ?? []) {
+      if (down.from === undefined) continue
       for (const up of ups) {
         if (up.line === down.line) continue
         const [pl, ql] = [plan.byLine.get(up.line), plan.byLine.get(down.line)]
@@ -172,7 +175,7 @@ function legsApart(
         if (Math.abs(x(up.port) - x(down.port)) >= pitch - plan.tolerance) continue
         const [u, d] = [xAxis.at(up.port), xAxis.at(down.port)]
         // the lower line comes from the left: the leg from above stands to its left
-        const fromLeft = x(down.other) < x(down.port)
+        const fromLeft = x(down.from) < x(down.port)
         const near = fromLeft ? after(u, d, pitch) : after(d, u, pitch)
         const far = fromLeft ? after(d, u, pitch) : after(u, d, pitch)
         const side = held.fits(near) ? near : held.fits(far) ? far : undefined
