@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { sampleNetworkYaml } from '../../fixtures/index.js'
 import { readNetworkModel } from '../../models/network-model-graph.js'
 import { solveAxis } from '../axis.js'
-import { drawNetwork } from '../draw.js'
+import { boundaryOf, drawNetwork } from '../draw.js'
 import { axesOf } from '../geometry.js'
 import { planningOf } from '../testing/stages.js'
 import { testMetrics } from '../testing/support.js'
@@ -28,7 +28,7 @@ links:
 
 describe('balanceOf', () => {
   it('draws the middle of every box to the middle of the one above it, weakly and in order', () => {
-    const plan = planningOf(sampleNetworkYaml, [])
+    const plan = planningOf(sampleNetworkYaml, boundaryOf(readNetworkModel(sampleNetworkYaml)))
     const { xAxis } = axesOf(plan)
     const { pair } = balanceOf(plan, xAxis)
     expect(pair).toHaveLength(plan.problem.above.length)
