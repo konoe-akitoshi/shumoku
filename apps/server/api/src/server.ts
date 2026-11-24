@@ -585,7 +585,9 @@ export class Server {
   private createAppServices(): AppServices {
     const topologyService = this.topologyService
     if (!topologyService) throw new Error('Topology service is not initialized')
-    const dataSourceService = new DataSourceService()
+    // One store for alerts pushed by webhooks: the webhook route writes it, plugins read it.
+    const grafanaAlerts = new GrafanaAlertService()
+    const dataSourceService = new DataSourceService({ alertStore: grafanaAlerts })
     const alertCollector = this.createAlertCollector(dataSourceService)
     const observationsService = new ObservationsService()
     const topologySourcesService = new TopologySourcesService()
@@ -641,7 +643,7 @@ export class Server {
         sources: topologySourcesService,
         dataSources: dataSourceService,
         observations: observationsService,
-        grafanaAlerts: new GrafanaAlertService(),
+        grafanaAlerts,
       }),
       topologies: topologyService,
     }
