@@ -41,7 +41,10 @@ describe('drawNetworkScene', () => {
   // at different widths. Two groups' ports on facing sides were then left a step too small for a
   // jog that nothing around them could widen, and asking the least of it anyway made the
   // separations of the columns a ring ("the constraints contain a cycle").
-  it('draws lines of different widths where a jog has no room to be widened', () => {
+  // a real network of forty devices: half a second here, several seconds on a busy CI runner
+  it('draws lines of different widths where a jog has no room to be widened', {
+    timeout: 30_000,
+  }, () => {
     const model = JSON.parse(
       readFileSync(new URL('./wide-lines.fixture.json', import.meta.url), 'utf8'),
     ) as NetworkModel
