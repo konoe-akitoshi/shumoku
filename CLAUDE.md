@@ -150,7 +150,7 @@ cpe, then l3-switch / load-balancer, then l2-switch, then access-point), else th
 the fastest link, else every node, and of those the most central. (3) applies per part, also when
 other parts have a boundary; a lone node gets nothing. A node with both a cable and a virtual link
 is not taken as a top. Two linked nodes as far from the top are put one above the other by device
-tier (`TIERS` in `drawing/problem.ts`); only a pair the types do not tell apart stands side by
+tier (`TIERS` in `drawing/tiers.ts`); only a pair the types do not tell apart stands side by
 side. Every group is a frame in the one drawing; no group is solved on its own.
 - `layoutNetwork(model, { metrics })` - a `NetworkModel` → `Drawing`: the `Scene` (boxes, ports,
   wires) and the `Arrangement` it was solved from (each frame's children left to right with the

@@ -10,7 +10,7 @@ import { assemble } from './assemble.js'
 import { CycleError } from './axis.js'
 import { type Corridors, corridorsOf } from './corridors.js'
 import { diagonalsOf } from './diagonals.js'
-import { type Fold, foldsOf } from './fold.js'
+import { foldsOf } from './fold.js'
 import { type Placed, placeAll } from './geometry.js'
 import { type Layers, layersOf } from './layers.js'
 import { heldLevels, levelClasses } from './level.js'
@@ -104,11 +104,12 @@ export function layoutParts(
   const problem = timed('problem', () => readProblem(network, structure, metrics, modelLayers))
   const { order } = orderKeysOf(problem, intent)
   // the ranks the flows give, then again with the rows a wide fan folds into as floors
-  let folds: Fold = { rank: new Map(), under: new Map(), fans: [] }
-  const ranks = timed('ranks', () => {
+  const { ranks, folds } = timed('ranks', () => {
     const flat = ranksOf(problem)
-    folds = foldsOf(problem, flat, order)
-    return folds.rank.size === 0 ? flat : ranksOf(problem, { rank: folds.rank, fans: folds.fans })
+    const folds = foldsOf(problem, flat, order)
+    const ranks =
+      folds.rank.size === 0 ? flat : ranksOf(problem, { rank: folds.rank, fans: folds.fans })
+    return { ranks, folds }
   })
   const layers = timed('layers', () => layersOf(problem, ranks, { order, under: folds.under }))
   const arrangement = arrangementOf(problem, ranks, layers, intent)

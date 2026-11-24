@@ -40,10 +40,11 @@ export function balanceOf(plan: Pick<Plan, 'problem'>, xAxis: Axis): Constraints
 
 /**
  * How hard a port on a top or bottom edge is drawn to the middle of its edge, against 1 for a run
- * pulled short. Weaker than the balance of boxes: a line made straight, a run kept short or a box
- * centred always wins, and this only decides where a port stands when nothing else does.
+ * pulled short and `BALANCE_WEIGHT` for a box over the boxes it hands over to. A line made straight
+ * is an equality and is not traded; the rest are weighed together, so a box may stand a fraction
+ * of a pixel off centre for its ports, and a port mostly stands where nothing else pulls it.
  */
-export const PORT_MIDDLE_WEIGHT = 0.1
+const PORT_MIDDLE_WEIGHT = 0.1
 
 /**
  * The weak pulls that stand the ports of a top or bottom edge about the middle of their box. A
@@ -51,7 +52,7 @@ export const PORT_MIDDLE_WEIGHT = 0.1
  * edge's margins; without this the packing put it at the very end of the edge, and two such ports
  * on boxes stacked one over the other could stand at one x and their lines run on each other.
  */
-export function portMiddlesOf(plan: Pick<Plan, 'problem' | 'tracks'>, xAxis: Axis): Constraints {
+export function portMiddlesOf(plan: Pick<Plan, 'tracks'>, xAxis: Axis): Constraints['pair'] {
   const pair: Constraints['pair'] = []
   for (const [k, list] of plan.tracks.ports) {
     const { box, side } = splitSide(k)
@@ -62,5 +63,5 @@ export function portMiddlesOf(plan: Pick<Plan, 'problem' | 'tracks'>, xAxis: Axi
       pair.push({ i: mid.v, j: port.v, d: mid.off - port.off, w: PORT_MIDDLE_WEIGHT })
     }
   }
-  return pair.length === 0 ? none : { sep: [], equal: [], pair }
+  return pair
 }

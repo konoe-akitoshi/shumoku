@@ -52,10 +52,12 @@ that gives anything wins, except that the guess in step 4 is always added for th
    logical uplink and routers with a tunnel all are.
 
 Up and down are then measured from the top. Two linked items as far from it are put one above
-the other by device tier (`TIERS` in [problem.ts](problem.ts)): the hop count ties by chance (any
+the other by device tier (`TIERS` in [tiers.ts](tiers.ts)): the hop count ties by chance (any
 triangle has such a side), so only a pair the types do not tell apart is `level` and stands side
-by side. Every group is a frame of the one drawing, spanning the rows it holds; nothing is solved
-on its own and set in afterwards.
+by side. A level pair puts its two items in one class of one height, so a direction between two
+items of one class closes a loop and is dropped (`acyclic`): a router and a switch both level with
+an untyped node stand on one row. Every group is a frame of the one drawing, spanning the rows it
+holds; nothing is solved on its own and set in afterwards.
 
 ## Hosting
 

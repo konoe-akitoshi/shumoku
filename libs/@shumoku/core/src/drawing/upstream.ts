@@ -31,7 +31,7 @@ export function upstreamOf(network: input.Network, named: readonly string[]): st
   for (const part of partsOf(graph)) {
     const nodes = part.filter((v) => graph.isNode.has(v))
     if (nodes.length < 2 || part.some((v) => taken.has(v))) continue
-    const picked = byLadder(network, nodes) ?? bySpeed(network, nodes) ?? nodes
+    const picked = byTier(network, nodes) ?? bySpeed(network, nodes) ?? nodes
     const centre = centreOf(graph, part, picked)
     out.push(...(busiest(network, centre) ?? centre))
   }
@@ -39,13 +39,13 @@ export function upstreamOf(network: input.Network, named: readonly string[]): st
 }
 
 /** The nodes of the first tier (`TIERS`) present, of those a top may be guessed among. */
-function byLadder(network: input.Network, nodes: readonly string[]): string[] | undefined {
+function byTier(network: input.Network, nodes: readonly string[]): string[] | undefined {
   const type = new Map(network.nodes.map((n) => [n.id, n.type]))
-  const rung = (id: string) => {
+  const tierOf = (id: string) => {
     const tier = tierOfType(type.get(id))
     return tier !== undefined && isTopTier(tier) ? tier : TIERS.length
   }
-  return best(nodes, (id) => -rung(id), -TIERS.length)
+  return best(nodes, (id) => -tierOf(id), -TIERS.length)
 }
 
 /** Of `nodes`, those with the most links of any kind, where that tells them apart. */
@@ -68,7 +68,9 @@ function bpsOf(rate: input.Rate | undefined): number {
 
 function bySpeed(network: input.Network, nodes: readonly string[]): string[] | undefined {
   const fastest = new Map<string, number>()
+  // the parts are joined by cables, and so is the backbone the speed tells
   for (const link of network.links) {
+    if (link.virtual === true) continue
     const bps = bpsOf(link.speed)
     for (const end of link.endpoints) {
       if ('node' in end) fastest.set(end.node, Math.max(fastest.get(end.node) ?? 0, bps))

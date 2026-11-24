@@ -69,7 +69,7 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
   // and, weakly, the middle of every box over the middles of the boxes below it
   pull.push(...balanceOf(plan, xAxis).pair)
   // and more weakly still, each port about the middle of its edge
-  pull.push(...portMiddlesOf(plan, xAxis).pair)
+  pull.push(...portMiddlesOf(plan, xAxis))
   const solveX = (more: { sep?: Sep[]; equal?: Sep[] } = {}) =>
     solveCompact(
       plan,
