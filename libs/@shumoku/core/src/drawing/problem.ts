@@ -12,6 +12,7 @@ import { slotOf } from './ground.js'
 import { drawnInPlace, hostBox, hostingOf, poolFrameId, poolsByPlace } from './hosting.js'
 import type { SideKey } from './keys.js'
 import type { Box, Insets, Metrics, PortSideLayout, Size } from './metrics.js'
+import { tierOfType } from './tiers.js'
 
 /**
  * The drawing layout's input, in the layout's own terms: boxes inside frames, and the order,
@@ -70,37 +71,7 @@ export interface UnitItem extends ItemBase {
   hullKind?: string
 }
 
-/**
- * A leaf group solved on its own (`nest.ts`) and standing in its parent as one box of a size the
- * solving settled. Its ports are on its top and bottom edges, at the places the lines of the
- * group were left at: `along` is the distance from the box's left edge, and the ports keep it.
- */
-export interface FrameItem extends ItemBase {
-  kind: 'frame'
-  /** The group it stands for. */
-  group: FrameId
-  /** What the box is drawn as, when it is drawn as a group. */
-  subgraph?: Subgraph
-  /** What the group keeps clear round its contents; the box is the contents and these. */
-  insets: Insets
-  /** By port name (a line's `<id>.<a|b>`), the edge the line meets the box by and its place along it. */
-  ports: Readonly<Record<string, { side: 'top' | 'bottom'; along: number }>>
-}
-
-/**
- * Where a line that leaves a leaf group meets the group's top or bottom edge, as the group is
- * solved: a point of no size that the line runs to, which a group's solving puts in the first
- * row (`top`) or the last (`bottom`). Not drawn.
- */
-export interface PortalItem extends ItemBase {
-  kind: 'portal'
-  side: 'top' | 'bottom'
-  /** The line it ends, and the end of it. */
-  line: string
-  end: 'a' | 'b'
-}
-
-export type Item = NodeItem | UnitItem | FrameItem | PortalItem
+export type Item = NodeItem | UnitItem
 
 /**
  * `oriented`: the structure gives the two ends a relation, one above the other or level, so the
@@ -482,8 +453,20 @@ export function readProblem(
   // ---- above and level, physical first so that a virtual direction that contradicts it is the
   // one dropped
   const aboveSeen = new Map<string, Above>()
-  const dropped: Above[] = []
   const levelSeen = new Map<string, Level>()
+  const typeWritten = new Map(network.nodes.map((n) => [n.id, n.type]))
+  const tierOfItem = new Map(items.map((i) => [i.id, tierOf(i, typeWritten)]))
+  /**
+   * Of two ends the structure finds as far from the boundary, the one that stands above: the one
+   * of the nearer tier (`TIERS`). Where the types tell them no apart (one tier, or a type missing),
+   * they are each other's equals and stand side by side.
+   */
+  const aboveOf = (a: ItemId, b: ItemId): Above | undefined => {
+    const [ta, tb] = [tierOfItem.get(a), tierOfItem.get(b)]
+    if (ta === undefined || tb === undefined || ta === tb) return undefined
+    return ta < tb ? { upper: a, lower: b } : { upper: b, lower: a }
+  }
+  const dropped: Above[] = []
   const planes = [...structure.planes].sort(
     (a, b) => compare(a.side, b.side) || compare(a.plane, b.plane),
   )
@@ -496,12 +479,22 @@ export function readProblem(
       if (aboveSeen.has(joinKey([edge.lower, edge.upper]))) dropped.push(edge)
       else aboveSeen.set(joinKey([edge.upper, edge.lower]), edge)
     }
+    // Two ends as far from the boundary are not equals for that: the hop count ties by chance
+    // (a triangle always has one such side). Where what the ends are tells which is nearer the way
+    // out (`aboveOf`), the line runs down from it; only ends the types do not tell apart stand
+    // side by side.
     for (const [a, b] of plane.even) {
       const ia = vertexItem(a)
       const ib = vertexItem(b)
       if (ia === ib) continue
-      const [x, y] = compare(ia, ib) <= 0 ? [ia, ib] : [ib, ia]
-      levelSeen.set(joinKey([x, y]), { a: x, b: y })
+      const edge = aboveOf(ia, ib)
+      if (edge === undefined) {
+        const [x, y] = compare(ia, ib) <= 0 ? [ia, ib] : [ib, ia]
+        levelSeen.set(joinKey([x, y]), { a: x, b: y })
+        continue
+      }
+      if (aboveSeen.has(joinKey([edge.lower, edge.upper]))) dropped.push(edge)
+      else aboveSeen.set(joinKey([edge.upper, edge.lower]), edge)
     }
   }
   const levels = [...levelSeen.values()].sort((p, q) => compare(p.a, q.a) || compare(p.b, q.b))
@@ -549,12 +542,24 @@ export function readProblem(
 }
 
 /**
+ * An item's tier (`TIERS`), from the type written on its nodes, which they must share; `undefined`
+ * where none is written or they differ, or for an item that is no device.
+ */
+function tierOf(item: Item, written: ReadonlyMap<NodeId, string | undefined>): number | undefined {
+  const nodes =
+    item.kind === 'unit' ? item.members.map((m) => m.node) : item.kind === 'card' ? [item.node] : []
+  const tiers = new Set(nodes.map((n) => tierOfType(written.get(n.id))))
+  const [only] = tiers
+  return tiers.size === 1 ? only : undefined
+}
+
+/**
  * What the directions and the levels say of two items, followed as far as they go: they stand at
  * one height, or one stands above the other through any chain of directions (levels taken as one
  * item), or nothing is said. A chain through a shared item is the structure's own statement;
  * nothing is added to it.
  */
-export function relation(
+function relation(
   above: readonly Above[],
   level: readonly Level[],
 ): (a: ItemId, b: ItemId) => Flow | undefined {
@@ -598,7 +603,7 @@ export function relation(
  * structure promises none; a cycle would leave no height to give, so it is cut here, at the
  * direction met last in id order, rather than let a layer fail on it.
  */
-export function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] } {
+function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] } {
   const parent = new Map<string, string>()
   const find = (x: string): string => {
     const p = parent.get(x) ?? x
@@ -646,7 +651,7 @@ export function linesById(problem: Pick<Problem, 'lines'>): ReadonlyMap<string, 
 /** The box an end is on: its node, else its item. */
 export const boxKey = (end: End): string => end.node ?? end.item
 
-export function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
+function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
   const at = new Map<string, Line[]>()
   for (const line of lines) {
     if (line.role === 'inside') continue

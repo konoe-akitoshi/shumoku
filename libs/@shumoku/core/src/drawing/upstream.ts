@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type * as input from '../input/model.js'
+import { isTopTier, TIERS, tierOfType } from './tiers.js'
 
 /**
  * Where to measure up and down from in the parts of a network that nothing names a boundary
@@ -11,9 +12,14 @@ import type * as input from '../input/model.js'
  *
  * Each part that is joined by links (or by a guest's host) and holds none of `named` is given
  * the nodes the first of these tells apart, and nothing when the part is a single node:
- * - the kind of node, by how near the way out a network usually puts it (`LADDER`);
+ * - the kind of node, by how near the way out a network usually puts it (`TIERS`);
  * - the fastest link a node ends, the backbone being faster than the edge;
- * - the shape alone: the centre, the nodes from which the farthest node is nearest.
+ * - every node.
+ * Of those, the most central are the top (the nodes from which the farthest node is nearest), and
+ * of those the ones with the most links, cabled or not (a border router with its peerings over
+ * the router of the AS beyond): a part has one top, and the rest hang from it. Taking every router
+ * as the top put them all on the top row, the lines between them running sideways. Nodes nothing
+ * tells apart are all kept: which of them is above would be a guess.
  *
  * A signal tells nodes apart only when some node of the part has it and some node does not
  * share its best value; then the next one is asked.
@@ -25,30 +31,32 @@ export function upstreamOf(network: input.Network, named: readonly string[]): st
   for (const part of partsOf(graph)) {
     const nodes = part.filter((v) => graph.isNode.has(v))
     if (nodes.length < 2 || part.some((v) => taken.has(v))) continue
-    out.push(
-      ...(byLadder(network, nodes) ?? bySpeed(network, nodes) ?? centreOf(graph, part, nodes)),
-    )
+    const picked = byTier(network, nodes) ?? bySpeed(network, nodes) ?? nodes
+    const centre = centreOf(graph, part, picked)
+    out.push(...(busiest(network, centre) ?? centre))
   }
   return out
 }
 
-/**
- * Node types by how near the way out of a network they usually stand, nearest first. What lies
- * beyond the network (internet, external, cloud) is named as a boundary before this is asked.
- */
-const LADDER: readonly (readonly string[])[] = [
-  ['router', 'firewall', 'vpn', 'cpe'],
-  ['l3-switch', 'load-balancer'],
-  ['l2-switch'],
-  ['access-point'],
-]
-
-const rungOf = new Map(LADDER.flatMap((types, rung) => types.map((t) => [t, rung] as const)))
-
-function byLadder(network: input.Network, nodes: readonly string[]): string[] | undefined {
+/** The nodes of the first tier (`TIERS`) present, of those a top may be guessed among. */
+function byTier(network: input.Network, nodes: readonly string[]): string[] | undefined {
   const type = new Map(network.nodes.map((n) => [n.id, n.type]))
-  const rung = (id: string) => rungOf.get(type.get(id) ?? '') ?? LADDER.length
-  return best(nodes, (id) => -rung(id), -LADDER.length)
+  const tierOf = (id: string) => {
+    const tier = tierOfType(type.get(id))
+    return tier !== undefined && isTopTier(tier) ? tier : TIERS.length
+  }
+  return best(nodes, (id) => -tierOf(id), -TIERS.length)
+}
+
+/** Of `nodes`, those with the most links of any kind, where that tells them apart. */
+function busiest(network: input.Network, nodes: readonly string[]): string[] | undefined {
+  const links = new Map<string, number>()
+  for (const link of network.links) {
+    for (const end of link.endpoints) {
+      if ('node' in end) links.set(end.node, (links.get(end.node) ?? 0) + 1)
+    }
+  }
+  return best(nodes, (id) => links.get(id) ?? 0, 0)
 }
 
 /** A rate in bits per second; `10G` is ten thousand million. */
@@ -60,7 +68,9 @@ function bpsOf(rate: input.Rate | undefined): number {
 
 function bySpeed(network: input.Network, nodes: readonly string[]): string[] | undefined {
   const fastest = new Map<string, number>()
+  // the parts are joined by cables, and so is the backbone the speed tells
   for (const link of network.links) {
+    if (link.virtual === true) continue
     const bps = bpsOf(link.speed)
     for (const end of link.endpoints) {
       if ('node' in end) fastest.set(end.node, Math.max(fastest.get(end.node) ?? 0, bps))
@@ -90,7 +100,7 @@ interface Graph {
 }
 
 /**
- * Nodes, segments and routing domains as one graph: a link joins its two ends, and a guest
+ * Nodes, segments and routing domains as one graph: a cable joins its two ends, and a guest
  * joins its host (the first node of a redundancy set it names).
  */
 function graphOf(network: input.Network): Graph {
@@ -102,7 +112,13 @@ function graphOf(network: input.Network): Graph {
   const idOf = (end: input.Endpoint) =>
     'node' in end ? end.node : 'segment' in end ? end.segment : end.routingDomain
   for (const node of network.nodes) next.set(node.id, next.get(node.id) ?? [])
-  for (const link of network.links) join(idOf(link.endpoints[0]), idOf(link.endpoints[1]))
+  // Up and down are measured over the cables (`orientPlanes`), so a part is what the cables join:
+  // a branch reached only by a tunnel, or switches whose uplinks are written as virtual, is a
+  // part of its own and has its own top, not none.
+  for (const link of network.links) {
+    if (link.virtual === true) continue
+    join(idOf(link.endpoints[0]), idOf(link.endpoints[1]))
+  }
   const firstOf = new Map((network.redundancy ?? []).map((r) => [r.id, r.nodes[0]]))
   for (const node of network.nodes) {
     const host = node.host === undefined ? undefined : (firstOf.get(node.host) ?? node.host)

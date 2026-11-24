@@ -37,13 +37,10 @@ describe('4. orientation', () => {
     expect(stagesOfYaml(yaml).candidates).toEqual([u('a'), u('b')])
   })
 
-  it('takes the candidates as the boundary when none is given', () => {
+  it('measures from nothing when no boundary is given, the candidates being only candidates', () => {
     const yaml = net({ links: 'x-a a-b b-c', virtual: ['x-a'] })
-    expect(stagesOfYaml(yaml).boundary).toEqual([u('a')])
-    expect(side(yaml, [], 'physical')?.flows).toEqual(side(yaml, ['a'], 'physical')?.flows)
-    // a virtual line laid over the cables, both ends boundary points, has no flow
-    const laid = net({ links: 'a-b b-c a-c', virtual: ['a-c'] })
-    expect(side(laid, [], 'virtual')?.flows).toEqual([])
+    expect(stagesOfYaml(yaml).boundary).toEqual([])
+    expect(side(yaml, [], 'physical')?.flows).toEqual([])
   })
 
   it('lists each line nearer end first, each side measured from the given boundary', () => {

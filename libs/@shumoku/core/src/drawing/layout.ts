@@ -10,22 +10,13 @@ import { assemble } from './assemble.js'
 import { CycleError } from './axis.js'
 import { type Corridors, corridorsOf } from './corridors.js'
 import { diagonalsOf } from './diagonals.js'
-import { type Fold, foldsOf } from './fold.js'
+import { foldsOf } from './fold.js'
 import { type Placed, placeAll } from './geometry.js'
 import { type Layers, layersOf } from './layers.js'
+import { heldLevels, levelClasses } from './level.js'
 import type { Metrics } from './metrics.js'
 import { needsOf } from './needs.js'
-import {
-  composeArrangement,
-  composeScene,
-  interfaceOf,
-  localProblemOf,
-  type Nested,
-  nestFrames,
-  portalSidesOf,
-  sizeFrames,
-} from './nest.js'
-import { type FrameId, type Problem, ROOT, readProblem } from './problem.js'
+import { type Problem, readProblem } from './problem.js'
 import { type Ranks, ranksOf } from './ranks.js'
 import { type Routes, routesOf } from './routes.js'
 import type { Scene } from './scene.js'
@@ -66,8 +57,6 @@ export interface Parts {
   unrelated: string[]
   /** Milliseconds each stage took. */
   timings: Record<string, number>
-  /** The groups solved on their own, by group; `problem` is then the parent's. */
-  children?: ReadonlyMap<FrameId, Parts>
 }
 
 /**
@@ -111,58 +100,17 @@ export function layoutParts(
 ): Parts {
   const timings: Record<string, number> = {}
   const timed = clockOf(timings)
+  const intent = hints.siblings
   const problem = timed('problem', () => readProblem(network, structure, metrics, modelLayers))
-  return layoutNested(problem, hints.siblings, timings, timed)
-}
-
-/** The ranks of a problem, with the rows of its wide fans settled. */
-interface Settled {
-  order: Map<FrameId, string[]>
-  folds: Fold
-  ranks: Ranks
-}
-
-function rankStage(problem: Problem, intent: OrderIntent | undefined, timed: Clock): Settled {
   const { order } = orderKeysOf(problem, intent)
   // the ranks the flows give, then again with the rows a wide fan folds into as floors
-  let folds: Fold = { rank: new Map(), under: new Map(), fans: [] }
-  const ranks = timed('ranks', () => {
+  const { ranks, folds } = timed('ranks', () => {
     const flat = ranksOf(problem)
-    folds = foldsOf(problem, flat, order)
-    const folded =
+    const folds = foldsOf(problem, flat, order)
+    const ranks =
       folds.rank.size === 0 ? flat : ranksOf(problem, { rank: folds.rank, fans: folds.fans })
-    // the portals of a group's bottom edge stand in a row of their own below all it holds
-    const bottom = new Set(
-      problem.items.flatMap((i) => (i.kind === 'portal' && i.side === 'bottom' ? [i.id] : [])),
-    )
-    if (bottom.size === 0) return folded
-    const last = Math.max(0, ...[...folded.rank].flatMap(([id, r]) => (bottom.has(id) ? [] : [r])))
-    const floors = new Map([
-      ...folds.rank,
-      ...[...bottom].map((id): [string, number] => [id, last + 1]),
-    ])
-    return ranksOf(problem, { rank: floors, fans: folds.fans })
+    return { ranks, folds }
   })
-  return { order, folds, ranks }
-}
-
-/** The stages for one flat problem, from the ranks to the scene. */
-function layoutProblem(
-  problem: Problem,
-  intent: OrderIntent | undefined,
-  timings: Record<string, number>,
-  timed: Clock,
-): Parts {
-  return stagesFrom(problem, rankStage(problem, intent, timed), intent, timings, timed)
-}
-
-function stagesFrom(
-  problem: Problem,
-  { order, folds, ranks }: Settled,
-  intent: OrderIntent | undefined,
-  timings: Record<string, number>,
-  timed: Clock,
-): Parts {
   const layers = timed('layers', () => layersOf(problem, ranks, { order, under: folds.under }))
   const arrangement = arrangementOf(problem, ranks, layers, intent)
   const corridors = timed('corridors', () => corridorsOf(problem, layers))
@@ -194,79 +142,19 @@ function stagesFrom(
   }
 }
 
-/** The order a person gave for the frames of a problem; `own` is for its root. */
-function intentFor(
-  siblings: OrderIntent | undefined,
-  frames: Problem['frames'],
-  own: readonly string[] | undefined,
-): OrderIntent | undefined {
-  const entries = frames.flatMap((f): [FrameId, readonly string[]][] => {
-    const names = f.id === ROOT ? own : siblings?.[f.id]
-    return names ? [[f.id, names]] : []
-  })
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined
-}
-
-/**
- * Each group with no group in it is solved on its own first, from the rank relations the parent
- * settles (which edge each of its lines meets the group by), and stands in the parent as a box of
- * the size that came out, its ports where its lines were left. The parent is then solved with
- * those boxes, and the scenes are put together (`composeScene`). `siblings` is the order given
- * for the frames of `problem`.
- */
-function layoutNested(
-  problem: Problem,
-  siblings: OrderIntent | undefined,
-  timings: Record<string, number>,
-  timed: Clock,
-): Parts {
-  const { outer, nested } = nestFrames(problem)
-  const intent = intentFor(siblings, outer.frames, siblings?.[ROOT])
-  if (nested.length === 0) return layoutProblem(problem, intent, timings, timed)
-  const settled = rankStage(outer, intent, timed)
-  const sides = portalSidesOf(outer, settled.ranks)
-  const children = new Map<FrameId, { group: Nested; local: Problem; parts: Parts }>()
-  timed('groups', () => {
-    for (const group of nested) {
-      const local = localProblemOf(problem, group, sides)
-      const own: Record<string, number> = {}
-      const given = intentFor(siblings, local.frames, siblings?.[group.frame.id])
-      const parts = layoutProblem(local, given, own, clockOf(own))
-      children.set(group.frame.id, { group, local, parts })
-    }
-  })
-  const interfaces = new Map(
-    [...children].map(([id, c]) => [id, interfaceOf(c.group, c.local, c.parts.scene)]),
-  )
-  const parts = stagesFrom(sizeFrames(outer, interfaces), settled, intent, timings, timed)
-  const composed = composeScene(
-    problem,
-    parts,
-    new Map(
-      [...children].map(([id, c]) => [id, { leaf: c.group, local: c.local, scene: c.parts.scene }]),
-    ),
-  )
-  const arrangement = composeArrangement(
-    parts.arrangement,
-    new Map([...children].map(([id, c]) => [id, c.parts.arrangement])),
-  )
-  return {
-    ...parts,
-    scene: composed,
-    arrangement,
-    children: new Map([...children].map(([id, c]) => [id, c.parts])),
-  }
-}
-
-/** How many times the coordinates are solved again with more lines bent, at most. */
+/** How many times the coordinates are solved again, letting levels go or bending lines, at most. */
 const BEND_ATTEMPTS = 8
 
 /**
  * The order of the lines (`tracksOf`), the sizes it asks for (`needsOf`) and the coordinates
  * (`placeAll`). A line laid straight across between two boxes side by side holds both its ends at
- * one height; where the ports of a side, the boxes held level and those heights leave no
- * solution, the lines whose ports close the ring are bent instead (they turn in the column
- * between) and the coordinates solved again. Every other line stays as it was.
+ * one height, and the items the structure puts level hold their middles at one height. Where the
+ * ports of a side and those heights leave no solution, the class of level items the ring's straight
+ * lines run within is let go first (`loose`, see `heldLevels`): its straight lines hold it level,
+ * at the heights their ports ask for. Only where that is not enough are the lines whose ports close
+ * the ring bent instead (they turn in the column between), and where a bundle of bent lines cannot
+ * stand the way its ports suggest, it is turned the other way (`flipped`). The coordinates are
+ * solved again after each; every other box and line stays as it was.
  */
 function placeBending(
   problem: Problem,
@@ -275,22 +163,67 @@ function placeBending(
   corridors: Corridors,
   routes: Routes,
   bent: ReadonlySet<string> = new Set(),
+  loose: ReadonlySet<string> = new Set(),
+  flipped: ReadonlySet<string> = new Set(),
   attempt = 0,
 ): { tracks: Tracks; sized: Problem; placed: Placed } {
-  const tracks = tracksOf(problem, layers, corridors, routes, { bent })
+  const tracks = tracksOf(problem, layers, corridors, routes, { bent, flipped })
   const sized = needsOf(problem, tracks)
+  const straight = sized.lines.flatMap((l): [string, string][] =>
+    tracks.across.has(l.id) ? [[l.a.item, l.b.item]] : [],
+  )
+  const held =
+    loose.size === 0 ? sized : { ...sized, level: heldLevels(sized.level, straight, loose) }
   try {
-    return { tracks, sized, placed: placeAll(sized, ranks, layers, corridors, tracks) }
+    return { tracks, sized, placed: placeAll(held, ranks, layers, corridors, tracks) }
   } catch (e) {
     if (!(e instanceof CycleError) || attempt >= BEND_ATTEMPTS) throw e
-    const more = new Set(bent)
     const ports = new Map([...tracks.entities.values()].map((p) => [String(p.id), p]))
+    const lines = new Set<string>()
     for (const name of e.unknowns) {
       const port = /^[xy] p:(.*)$/.exec(name)?.[1]
       for (const end of (port === undefined ? undefined : ports.get(port))?.ends ?? [])
-        more.add(end.line)
+        lines.add(end.line)
     }
-    if (more.size === bent.size) throw e
-    return placeBending(problem, ranks, layers, corridors, routes, more, attempt + 1)
+    // first, the classes of level items the ring's straight lines run within
+    const classOf = levelClasses(sized.level)
+    const release = new Set(loose)
+    for (const line of sized.lines) {
+      if (!lines.has(line.id) || !tracks.across.has(line.id)) continue
+      const c = classOf(line.a.item)
+      if (c !== undefined && c === classOf(line.b.item)) release.add(c)
+    }
+    if (release.size > loose.size)
+      return placeBending(
+        problem,
+        ranks,
+        layers,
+        corridors,
+        routes,
+        bent,
+        release,
+        flipped,
+        attempt + 1,
+      )
+    // then the lines themselves
+    const more = new Set([...bent, ...lines])
+    if (more.size > bent.size)
+      return placeBending(
+        problem,
+        ranks,
+        layers,
+        corridors,
+        routes,
+        more,
+        loose,
+        flipped,
+        attempt + 1,
+      )
+    // last, the bundles of bent lines turned the other way
+    const turn = new Set(flipped)
+    for (const [key, bundle] of tracks.bundles)
+      if (!flipped.has(key) && bundle.lines.some((l) => lines.has(l.line))) turn.add(key)
+    if (turn.size === flipped.size) throw e
+    return placeBending(problem, ranks, layers, corridors, routes, bent, loose, turn, attempt + 1)
   }
 }

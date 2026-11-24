@@ -3,13 +3,15 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { type AxisInput, solveAxis } from '../axis.js'
-import { jogLeastOf } from '../kin.js'
-import { ledgerOf } from '../ledger.js'
+import { jogLeastOf, pitchOf } from '../kin.js'
+import { type Ledger, ledgerOf } from '../ledger.js'
+import type { Var } from '../tracks.js'
 import { type AlignPlan, alignDown } from './align.js'
-import { balanceOf } from './balance.js'
+import { balanceOf, portMiddlesOf } from './balance.js'
 import type { Plan } from './plan.js'
 import {
   type Axis,
+  after,
   frameSpans,
   type Sep,
   type Sys,
@@ -66,6 +68,8 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
   for (const s of unaligned) pull.push({ i: xAxis.at(s.a).v, j: xAxis.at(s.b).v, w: 1, d: 0 })
   // and, weakly, the middle of every box over the middles of the boxes below it
   pull.push(...balanceOf(plan, xAxis).pair)
+  // and more weakly still, each port about the middle of its edge
+  pull.push(...portMiddlesOf(plan, xAxis))
   const solveX = (more: { sep?: Sep[]; equal?: Sep[] } = {}) =>
     solveCompact(
       plan,
@@ -95,7 +99,8 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
       back: delta > 0 ? left : right,
     })
   }
-  if (small.length === 0) return { xValues, sys: xSys }
+  const apart = legsApart(plan, xAxis, xValues, held)
+  if (small.length === 0 && apart.length === 0) return { xValues, sys: xSys }
   const level: Sep[] = []
   for (const c of small) {
     if (!held.admits(c.sep)) continue
@@ -115,7 +120,70 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
     wide.push(side)
   }
   return {
-    xValues: solveX({ equal: level, sep: wide }),
+    xValues: solveX({ equal: level, sep: [...wide, ...apart] }),
     sys: xSys,
   }
+}
+
+/**
+ * Two lines turning in one gap between rows each run down a leg there: one from a port on the
+ * box above to where it turns, the other from where it turns to a port on the box below. Where
+ * the two legs stand at one x they can run on each other for the stretch their heights share,
+ * and nothing in the widths keeps them apart, since the ports are on different boxes. So where
+ * the solve put such a pair of legs nearer than the pitch of their lines, the leg from above is
+ * kept a pitch to the side the other line comes from (its run passes over the leg, crossing it
+ * once, as the two would cross anyway), where the rest of the drawing has room for it. The
+ * separations are held in `held`, as the alignments are, so what is solved after keeps them.
+ */
+function legsApart(plan: XPlan, xAxis: Axis, xValues: Float64Array, held: Ledger): Sep[] {
+  const { tracks } = plan
+  const onX = (v: Var): boolean =>
+    v.kind === 'port'
+      ? tracks.entities.get(v.id)?.axis === 'x'
+      : tracks.lanes.get(v.key)?.axis === 'x'
+  /** A leg from a port above, and one to a port below with the last x its line had before it. */
+  type Down = { line: string; port: Var; from: Var | undefined }
+  const fromAbove = new Map<number, { line: string; port: Var }[]>()
+  const toBelow = new Map<number, Down[]>()
+  for (const [line, chain] of tracks.chains) {
+    for (const [i, v] of chain.entries()) {
+      if (v.kind !== 'lane') continue
+      const lane = tracks.lanes.get(v.key)
+      if (lane?.axis !== 'y') continue
+      const [prev, next] = [chain[i - 1], chain[i + 1]]
+      if (prev?.kind === 'port' && tracks.entities.get(prev.id)?.side === 'bottom')
+        fromAbove.set(lane.node, [...(fromAbove.get(lane.node) ?? []), { line, port: prev }])
+      if (next?.kind === 'port' && tracks.entities.get(next.id)?.side === 'top') {
+        // the run may have come through a door of a frame first, along more than one row
+        const from = chain.slice(0, i).reverse().find(onX)
+        toBelow.set(lane.node, [...(toBelow.get(lane.node) ?? []), { line, port: next, from }])
+      }
+    }
+  }
+  const x = (v: Var) => {
+    const r = xAxis.at(v)
+    return (xValues[r.v] ?? 0) + r.off
+  }
+  const out: Sep[] = []
+  for (const [node, ups] of fromAbove) {
+    for (const down of toBelow.get(node) ?? []) {
+      if (down.from === undefined) continue
+      for (const up of ups) {
+        if (up.line === down.line) continue
+        const [pl, ql] = [plan.byLine.get(up.line), plan.byLine.get(down.line)]
+        const pitch = pl && ql ? pitchOf(plan.metrics, pl, ql) : plan.metrics.gapApart
+        if (Math.abs(x(up.port) - x(down.port)) >= pitch - plan.tolerance) continue
+        const [u, d] = [xAxis.at(up.port), xAxis.at(down.port)]
+        // the lower line comes from the left: the leg from above stands to its left
+        const fromLeft = x(down.from) < x(down.port)
+        const near = fromLeft ? after(u, d, pitch) : after(d, u, pitch)
+        const far = fromLeft ? after(d, u, pitch) : after(u, d, pitch)
+        const side = held.fits(near) ? near : held.fits(far) ? far : undefined
+        if (!side) continue
+        held.hold(side)
+        out.push(side)
+      }
+    }
+  }
+  return out
 }

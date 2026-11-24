@@ -7,7 +7,6 @@ import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
 import { must } from '../must.js'
 import { gapsOf, marginsOf } from '../ports.js'
 import { type FrameId, ROOT } from '../problem.js'
-import { portalsOf, sealedOf } from '../sides.js'
 import type { Var } from '../tracks.js'
 import type { Plan } from './plan.js'
 
@@ -209,15 +208,11 @@ export function portChain(
   along: 'x' | 'y',
 ): Constraints {
   const sep: Sep[] = []
-  const sealed = sealedOf(plan.problem)
-  const portals = portalsOf(plan.problem)
   for (const [k, list] of plan.tracks.ports) {
     if (list.length === 0) continue
     const { box, side } = splitSide(k)
     const horizontal = side === 'top' || side === 'bottom'
     if (horizontal !== (along === 'x')) continue
-    // a leaf group's ports keep the places its solving gave them (`framePorts`)
-    if (sealed.has(box)) continue
     const slot = must(plan.problem.slots, box, 'slot of box')
     const layout = plan.problem.portSides?.get(k)
     const lo = axis.lowRef(box)
@@ -225,8 +220,7 @@ export function portChain(
     const first = list[0]
     const last = list[list.length - 1]
     if (first === undefined || last === undefined) continue
-    // a portal is a point: its port stands on it
-    const { lead, trail } = portals.has(box) ? { lead: 0, trail: 0 } : marginsOf(layout, slot)
+    const { lead, trail } = marginsOf(layout, slot)
     sep.push(after(lo, axis.at({ kind: 'port', id: first }), lead))
     for (const g of gapsOf(layout, slot, list.length)) {
       const [a, b] = [list[g.from], list[g.to]]
@@ -236,26 +230,6 @@ export function portChain(
     sep.push(after(axis.at({ kind: 'port', id: last }), hi, trail))
   }
   return { sep, equal: [], pair: [] }
-}
-
-/**
- * The ports of a leaf group (`FrameItem`) stand where its solving put them: each at its distance
- * from the box's left edge, so the lines that were left at those places meet the lines of the
- * parent there.
- */
-export function framePorts(plan: Pick<Plan, 'tracks' | 'problem'>, axis: Axis): Constraints {
-  const equal: Sep[] = []
-  const frames = new Map(
-    plan.problem.items.flatMap((i) => (i.kind === 'frame' ? [[i.id, i] as const] : [])),
-  )
-  for (const ent of plan.tracks.entities.values()) {
-    const item = frames.get(ent.box)
-    const along = item?.ports[ent.label ?? '']?.along
-    if (!item || along === undefined || ent.axis !== 'x') continue
-    const lo = axis.lowRef(item.id)
-    equal.push(same({ v: lo.v, off: lo.off + along }, axis.at({ kind: 'port', id: ent.id })))
-  }
-  return { sep: [], equal, pair: [] }
 }
 
 /** The low and high unknown of every frame. */

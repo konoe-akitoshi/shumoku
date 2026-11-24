@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { compare } from '../structure/keys.js'
+import { compare, joinKey } from '../structure/keys.js'
 import type { Building } from './building.js'
 import { type Corridors, opposite } from './corridors.js'
 import { laneOrder } from './crossing.js'
@@ -77,8 +77,18 @@ export interface Tracks {
   chains: ReadonlyMap<string, readonly Var[]>
   /** Pairs of coordinates in a chain that are one and the same (a run carried on, level ports). */
   joined: readonly (readonly [VarKey, VarKey])[]
+  /** The lines laid straight across between two boxes side by side: both ends at one height. */
+  across: ReadonlySet<string>
   /** The vertical runs of each column, left to right. */
   columns: ReadonlyMap<number, readonly LaneKey[]>
+  /**
+   * What the heights keep for the lines bent between two boxes side by side (`Bundle`): each step
+   * is a port that stands at least a pitch of `lines` above another, so that lines turning one
+   * after another in the column cross neither each other nor each other's runs.
+   */
+  steps: readonly Step[]
+  /** The bundles of lines bent between two boxes side by side, by `bundleKey`. */
+  bundles: ReadonlyMap<string, Bundle>
   /** The ports on each side of a box, in order along the side. */
   ports: ReadonlyMap<SideKey, readonly PortKey[]>
   /** What the order of the runs in the columns costs in crossings. */
@@ -110,6 +120,33 @@ function crosses(entry: Side, a: Chord, b: Chord): number {
   return entry === 'top' || entry === 'right' ? (order < 0 ? 1 : 0) : order > 0 ? 1 : 0
 }
 
+/**
+ * Lines bent between the same two boxes side by side: each runs from a port on the right side of
+ * the left box to a column and on to a port on the left side of the right box, turning once in the
+ * column. Their ports stand in one order on both sides (`lines`, top to bottom). `falling` says the
+ * bundle stands lower on the right box than on the left, so the lowest line turns first (leftmost)
+ * and the others after it; otherwise the highest turns first. Turned in that order, with each line
+ * landing a pitch clear of where the next leaves (`Step`), no two of them cross or run on one
+ * another.
+ */
+export interface Bundle {
+  readonly column: number
+  /** Top to bottom: each line with its port on the left box and on the right box. */
+  readonly lines: readonly { line: string; left: PortKey; right: PortKey }[]
+  readonly falling: boolean
+}
+
+/** `below` stands at least the pitch of the two `lines` under `above`. */
+export interface Step {
+  readonly above: PortKey
+  readonly below: PortKey
+  readonly lines: readonly [string, string]
+}
+
+/** The name of the bundle between two sides, whichever way round they are given. */
+export const bundleKey = (column: number, left: SideKey, right: SideKey): string =>
+  joinKey([column, left, right])
+
 export interface TracksOptions {
   /**
    * Lines not to lay straight across between two boxes side by side: their ends keep their own
@@ -117,6 +154,11 @@ export interface TracksOptions {
    * left the heights with no solution.
    */
   bent?: ReadonlySet<string>
+  /**
+   * Bundles (by `bundleKey`) to turn the other way from the one their ports suggest, set only for
+   * bundles whose steps left the heights with no solution.
+   */
+  flipped?: ReadonlySet<string>
 }
 
 export function tracksOf(
@@ -124,7 +166,7 @@ export function tracksOf(
   layers: Layers,
   corridors: Corridors,
   routes: Routes,
-  { bent = new Set() }: TracksOptions = {},
+  { bent = new Set(), flipped = new Set() }: TracksOptions = {},
 ): Tracks {
   const { nodes, doors } = corridors
   const byLine = linesById(problem)
@@ -150,6 +192,9 @@ export function tracksOf(
   const joined: [VarKey, VarKey][] = []
   /** For the ports at the two ends of a line laid straight across, the one name they sort by. */
   const acrossName = new Map<PortKey, PortKey>()
+  const across = new Set<string>()
+  /** The lines bent across one column between two sides, with their two ports. */
+  const crossing = new Map<string, { a: PortKey; b: PortKey; column: number }>()
   const runOf = new Map<VarKey, VarKey>()
   const find = (k: VarKey): VarKey => {
     const p = runOf.get(k) ?? k
@@ -233,9 +278,27 @@ export function tracksOf(
           k === items.length - 1 &&
           !bent.has(route.line)
         if (levelStraight || between.length === 0) joined.push([varKey(p.v), varKey(q.v)])
+        const crossed =
+          !levelStraight &&
+          between.length > 0 &&
+          p.axis === 'y' &&
+          prev === 0 &&
+          k === items.length - 1 &&
+          p.v.kind === 'port' &&
+          q.v.kind === 'port' &&
+          route.nodes.length === 3 &&
+          nodes[route.nodes[1] ?? -1]?.kind === 'column'
+        if (crossed && p.v.kind === 'port' && q.v.kind === 'port') {
+          // a line bent across one column between two sides: its ends keep one order on both
+          const name = compare(p.v.id, q.v.id) <= 0 ? p.v.id : q.v.id
+          acrossName.set(p.v.id, name)
+          acrossName.set(q.v.id, name)
+          crossing.set(route.line, { a: p.v.id, b: q.v.id, column: route.nodes[1] ?? -1 })
+        }
         if (levelStraight && p.v.kind === 'port' && q.v.kind === 'port') {
           // the two ends of a line straight across share one height: one name orders both sides
           const name = compare(p.v.id, q.v.id) <= 0 ? p.v.id : q.v.id
+          across.add(route.line)
           acrossName.set(p.v.id, name)
           acrossName.set(q.v.id, name)
         } else {
@@ -363,23 +426,11 @@ export function tracksOf(
     portOrder.set(k, [...(portOrder.get(k) ?? []), e.id])
   }
   const finalPorts = new Map<SideKey, PortKey[]>()
-  const frameItems = new Map(
-    problem.items.flatMap((i) => (i.kind === 'frame' ? [[i.id, i] as const] : [])),
-  )
   for (const [k, list] of portOrder) {
     const ents = list.map((id) => entities.get(id)).filter((e): e is Entity => e !== undefined)
     const firstEnt = ents[0]
     if (!firstEnt) continue
-    const sealed = frameItems.get(firstEnt.box)
-    if (sealed) {
-      // a leaf group's ports stand in the order its own solving left them in
-      const alongOf = (id: PortKey): number =>
-        sealed.ports[entities.get(id)?.label ?? '']?.along ?? Number.POSITIVE_INFINITY
-      finalPorts.set(
-        k,
-        [...list].sort((p, q) => alongOf(p) - alongOf(q) || compare(p, q)),
-      )
-    } else if (firstEnt.axis === 'x') {
+    if (firstEnt.axis === 'x') {
       // stage 2 orders only the ports it knew of; the others follow them, in id order
       const given = new Map((layers.ports.get(k) ?? []).map((id, i) => [id, i]))
       finalPorts.set(
@@ -433,5 +484,74 @@ export function tracksOf(
     }
   }
 
-  return { entities, lanes, chains, joined, columns, ports: finalPorts, crossings }
+  // ---- 3. the lines bent between two boxes side by side, turned in an order that crosses nothing
+  const placeIn = new Map<PortKey, number>()
+  for (const list of finalPorts.values()) for (const [i, id] of list.entries()) placeIn.set(id, i)
+  const sideOf = (id: PortKey): SideKey => {
+    const e = must(entities, id, 'port of bundle')
+    return sideKey(e.box, e.side)
+  }
+  const grouped = new Map<
+    string,
+    { column: number; left: SideKey; right: SideKey; lines: Bundle['lines'][number][] }
+  >()
+  for (const [line, { a, b, column }] of [...crossing].sort((p, q) => compare(p[0], q[0]))) {
+    const [ea, eb] = [entities.get(a), entities.get(b)]
+    if (!ea || !eb) continue
+    // the port on the right side stands on the left box
+    const [left, right] = ea.side === 'right' ? [a, b] : [b, a]
+    if (entities.get(left)?.side !== 'right' || entities.get(right)?.side !== 'left') continue
+    const key = bundleKey(column, sideOf(left), sideOf(right))
+    const g = grouped.get(key) ?? { column, left: sideOf(left), right: sideOf(right), lines: [] }
+    g.lines.push({ line, left, right })
+    grouped.set(key, g)
+  }
+  const bundles = new Map<string, Bundle>()
+  const steps: Step[] = []
+  const at = (id: PortKey) => placeIn.get(id) ?? 0
+  for (const [key, g] of grouped) {
+    const lines = [...g.lines].sort((p, q) => at(p.left) - at(q.left) || compare(p.line, q.line))
+    const top = lines[0]
+    if (!top) continue
+    // the bundle stands lower on the side that has more ports over it
+    const falling = at(top.right) > at(top.left) !== flipped.has(key)
+    bundles.set(key, { column: g.column, lines, falling })
+    if (lines.length < 2) continue
+    // the lanes of the bundle keep the places they hold in the column, in the order of the turns
+    const column = columns.get(g.column)
+    if (column) {
+      const own = new Set(lines.map((l) => laneKey(l.line, 0)))
+      const places = column.flatMap((k, i) => (own.has(k) ? [i] : []))
+      const turns = falling ? [...lines].reverse() : lines
+      const next = [...column]
+      for (const [i, place] of places.entries()) {
+        const l = turns[i]
+        if (l) next[place] = laneKey(l.line, 0)
+      }
+      columns.set(g.column, next)
+    }
+    // each line lands a pitch clear of where the next to turn leaves
+    for (const [i, upper] of lines.slice(0, -1).entries()) {
+      const lower = lines[i + 1]
+      if (!lower) continue
+      steps.push(
+        falling
+          ? { above: upper.left, below: lower.right, lines: [upper.line, lower.line] }
+          : { above: upper.right, below: lower.left, lines: [upper.line, lower.line] },
+      )
+    }
+  }
+
+  return {
+    entities,
+    lanes,
+    chains,
+    joined,
+    across,
+    columns,
+    steps,
+    bundles,
+    ports: finalPorts,
+    crossings,
+  }
 }

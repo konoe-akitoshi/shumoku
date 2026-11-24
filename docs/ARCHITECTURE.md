@@ -93,16 +93,19 @@ configuration → structure → relative placement (frames, rows, order) + a per
   order; an earlier step wins:
   1. `drawing.settings.boundary`. No YAML field or UI sets it today; only code that
      builds the `NetworkModel` can.
-  2. The structure's candidates: nodes that have both a cable and a virtual
-     link (`structure/orientation.ts`).
-  3. Nodes of type `external` or `cloud`, and the routing domains that links
-     reach. `type: internet` is not among them.
-  4. For each connected part of the network that none of 1-3 reaches, a
-     guessed upstream (`drawing/upstream.ts`): by node type (router /
+  2. Nodes of type `internet`, `external` or `cloud`, and the routing domains
+     that links reach.
+  3. For each part the cables join that neither reaches, one guessed top
+     (`drawing/upstream.ts`): the first device tier present (router, then
      firewall / vpn / cpe, then l3-switch / load-balancer, then l2-switch,
-     then access-point), else the node(s) ending the fastest link, else the
-     graph centre. This applies per part, also when other parts have a
-     boundary. A lone node gets nothing.
+     then access-point; `drawing/tiers.ts`), else the node(s) ending the
+     fastest cable, else every node; of those the most central, then the
+     one(s) with the most links. This applies per part, also when other parts
+     have a boundary. A lone node gets nothing. A node with both a cable and a
+     virtual link is not taken as a top.
+- Two linked items as far from the boundary are put one above the other by
+  device tier; only a pair the tiers do not tell apart is level, side by side.
+  Every group is a frame of the one drawing; none is solved on its own.
 - The **arrangement** (`drawing/arrangement.ts`) is the relative placement the
   stages settled on, named so a person's intent has something to speak about:
   for each frame (group id; `ROOT_FRAME`, `''`, for the top level) its children

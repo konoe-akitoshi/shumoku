@@ -166,11 +166,9 @@ links:
     speed: 10G
   - endpoints: [{node: core-sw-01, port: ge-0/0/1}, {node: access-sw-01, port: ge-0/0/48}]
     segments: [vlan-200, vlan-300]
-    virtual: true
     speed: 10G
   - endpoints: [{node: core-sw-02, port: ge-0/0/1}, {node: access-sw-02, port: ge-0/0/48}]
     segments: [vlan-200, vlan-300]
-    virtual: true
     speed: 10G
   - endpoints: [{node: access-sw-01, port: ge-0/0/1}, {node: esxi-01, port: vmnic0}]
     segments: [vlan-200]

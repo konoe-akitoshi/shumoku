@@ -1150,13 +1150,12 @@ export interface GraphSettings {
   /**
    * Where the network meets what lies beyond it (ids of nodes, segments or routing domains),
    * which the drawing's direction is measured from. The drawing (`boundaryOf`) takes, in this
-   * order, and an earlier step wins: (1) this setting; (2) the structure's own candidates, the
-   * nodes that have both a cable and a virtual link; (3) the `external` or `cloud` nodes and the
-   * routing domains that links reach (`internet` is not among them); (4) for each connected
-   * part that none of these reaches, a guessed upstream (by node type, else the node ending the
-   * fastest link, else the graph centre), also when other parts have a boundary; a lone node
-   * gets nothing. A choice of how to draw, not a fact of the configuration, so it lives in the
-   * drawing layer only.
+   * order, and an earlier step wins: (1) this setting; (2) the `internet`, `external` or `cloud`
+   * nodes and the routing domains that links reach; (3) for each part the cables join that
+   * neither reaches, one guessed top (the first device tier present, else the node ending the
+   * fastest cable, else any node; of those the most central, then the one with the most links),
+   * also when other parts have a boundary; a lone node gets nothing. A choice of how to draw,
+   * not a fact of the configuration, so it lives in the drawing layer only.
    */
   boundary?: string[]
 }

@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { frameKey } from '../keys.js'
-import { flowRoom, keepOff, whiteOf } from '../kin.js'
+import { flowRoom, keepOff, pitchOf, whiteOf } from '../kin.js'
 import type { Lanes } from '../lane-order.js'
 import { must } from '../must.js'
 import { ROOT } from '../problem.js'
@@ -160,11 +160,34 @@ function laneHeights(
   return { sep, equal: [], pair: [] }
 }
 
+/**
+ * The lines bent between two boxes side by side turn in the column one after another, in the order
+ * the tracks gave (`Bundle`); each lands a pitch clear of where the next to turn leaves (`Step`).
+ * Without it their heights are free of the order they turn in, and two of them cross, or run on
+ * one another where a port of one box happens to stand level with a port of the other.
+ */
+function bundleSteps(plan: Pick<Plan, 'tracks' | 'byLine' | 'metrics'>, yAxis: Axis): Constraints {
+  const sep: Sep[] = []
+  for (const { above, below, lines } of plan.tracks.steps) {
+    const [p, q] = lines.map((id) => must(plan.byLine, id, 'line of step'))
+    if (!p || !q) continue
+    sep.push(
+      after(
+        yAxis.at({ kind: 'port', id: above }),
+        yAxis.at({ kind: 'port', id: below }),
+        pitchOf(plan.metrics, p, q),
+      ),
+    )
+  }
+  return { sep, equal: [], pair: [] }
+}
+
 /** What the heights read of the plan. */
 export type YPlan = Parameters<typeof flowHeights>[0] &
   Parameters<typeof rankBands>[0] &
   Parameters<typeof laneHeights>[0] &
   Parameters<typeof portChain>[0] &
+  Parameters<typeof bundleSteps>[0] &
   Parameters<typeof solveCompact>[0]
 
 /**
@@ -186,6 +209,7 @@ export function placeY(
       rankBands(plan, yAxis),
       laneHeights(plan, xAxis, yAxis, xValues, lanes),
       portChain(plan, yAxis, 'y'),
+      bundleSteps(plan, yAxis),
     ),
   )
   const room = flowRoom(plan.metrics)
