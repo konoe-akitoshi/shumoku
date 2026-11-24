@@ -480,7 +480,7 @@ function nodeSpec(node: input.Node, icon: string | undefined): NodeSpec {
   if (isVm(node)) {
     return {
       kind: 'compute',
-      type: node.type && !isVmType(node.type) ? deviceType(node.type) : DeviceType.Server,
+      type: node.type && !isVmType(node.type) ? deviceTypeOf(node.type) : DeviceType.Server,
       ...(node.platform && { platform: node.platform }),
       ...vendor,
       ...(icon && { icon }),
@@ -488,7 +488,7 @@ function nodeSpec(node: input.Node, icon: string | undefined): NodeSpec {
   }
   return {
     kind: 'hardware',
-    ...(node.type && { type: deviceType(node.type) }),
+    ...(node.type && { type: deviceTypeOf(node.type) }),
     ...vendor,
     ...(model && { model }),
     ...(icon && { icon }),
@@ -518,7 +518,8 @@ const deviceTypes: Record<string, DeviceType> = {
   'virtual-machine': DeviceType.Server,
 }
 
-function deviceType(type: string): DeviceType {
+/** A written type as the device type it names: its own spelling or an alias, in any case. */
+export function deviceTypeOf(type: string): DeviceType {
   return deviceTypes[type.toLowerCase()] ?? DeviceType.Generic
 }
 

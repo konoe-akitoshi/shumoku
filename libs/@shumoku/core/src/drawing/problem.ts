@@ -454,7 +454,8 @@ export function readProblem(
   // one dropped
   const aboveSeen = new Map<string, Above>()
   const levelSeen = new Map<string, Level>()
-  const tierOfItem = new Map(items.map((i) => [i.id, tierOf(i)]))
+  const typeWritten = new Map(network.nodes.map((n) => [n.id, n.type]))
+  const tierOfItem = new Map(items.map((i) => [i.id, tierOf(i, typeWritten)]))
   /**
    * Of two ends the structure finds as far from the boundary, the one that stands above: the one
    * of the nearer tier (`TIERS`). Where the types tell them no apart (one tier, or a type missing),
@@ -541,15 +542,13 @@ export function readProblem(
 }
 
 /**
- * An item's tier (`TIERS`), from the type its nodes share; `undefined` where none is written or
- * they differ, or for an item that is no device.
+ * An item's tier (`TIERS`), from the type written on its nodes, which they must share; `undefined`
+ * where none is written or they differ, or for an item that is no device.
  */
-function tierOf(item: Item): number | undefined {
+function tierOf(item: Item, written: ReadonlyMap<NodeId, string | undefined>): number | undefined {
   const nodes =
     item.kind === 'unit' ? item.members.map((m) => m.node) : item.kind === 'card' ? [item.node] : []
-  const tiers = new Set(
-    nodes.map((n) => (n.spec && 'type' in n.spec ? tierOfType(n.spec.type) : undefined)),
-  )
+  const tiers = new Set(nodes.map((n) => tierOfType(written.get(n.id))))
   const [only] = tiers
   return tiers.size === 1 ? only : undefined
 }

@@ -9,6 +9,7 @@ import type { Arrangement } from './arrangement.js'
 import { layoutParts } from './layout.js'
 import type { Metrics } from './metrics.js'
 import type { Scene } from './scene.js'
+import { isBeyond } from './tiers.js'
 import { upstreamOf } from './upstream.js'
 
 export interface DrawOptions {
@@ -24,9 +25,6 @@ export interface Drawing {
   scene: Scene
   arrangement: Arrangement
 }
-
-/** Node types that stand for what lies beyond the network. */
-const BEYOND = new Set(['internet', 'external', 'cloud'])
 
 /**
  * Where the network meets what lies beyond it, as ids the structure can measure from. The
@@ -58,7 +56,7 @@ function beyond(network: input.Network): string[] {
     ),
   )
   return [
-    ...network.nodes.filter((n) => n.type !== undefined && BEYOND.has(n.type)).map((n) => n.id),
+    ...network.nodes.filter((n) => isBeyond(n.type)).map((n) => n.id),
     ...(network.routingDomains ?? []).filter((d) => reached.has(d.id)).map((d) => d.id),
   ]
 }

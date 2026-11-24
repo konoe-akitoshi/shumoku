@@ -26,6 +26,19 @@ describe('the upstream guessed where no boundary is named', () => {
     expect(upstreamOf(n, [])).toEqual(['rt'])
   })
 
+  it('reads a type as the configuration does, aliases and case alike', () => {
+    const n = net(
+      [
+        { id: 'sw', type: 'Switch' },
+        { id: 'ap1', type: 'ap' },
+        { id: 'ap2', type: 'ap' },
+        { id: 'pc', type: 'server' },
+      ],
+      [link('sw', 'ap1'), link('ap1', 'ap2'), link('ap2', 'pc')],
+    )
+    expect(upstreamOf(n, [])).toEqual(['sw'])
+  })
+
   it('takes the fastest link when the types tell nothing apart', () => {
     const n = net(
       [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
