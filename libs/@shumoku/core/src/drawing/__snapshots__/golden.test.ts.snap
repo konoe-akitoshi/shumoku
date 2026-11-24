@@ -3,13 +3,13 @@
 exports[`the drawing of fixed networks > examples/device-status.yaml 1`] = `
 {
   "bounds": {
-    "height": 350,
-    "width": 580,
+    "height": 318,
+    "width": 594.7080182610944,
     "x": 0,
     "y": 0,
   },
   "groups": 3,
-  "hash": "08dd63d70db1868f",
+  "hash": "e584951e89ca79b1",
   "nodes": 8,
   "wires": 4,
 }
@@ -18,13 +18,13 @@ exports[`the drawing of fixed networks > examples/device-status.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
 {
   "bounds": {
-    "height": 680,
-    "width": 470,
+    "height": 706,
+    "width": 562.7080442254756,
     "x": 0,
     "y": 0,
   },
   "groups": 7,
-  "hash": "80552fdc2ea0bf79",
+  "hash": "e521d41f88cc9b00",
   "nodes": 14,
   "wires": 12,
 }
@@ -33,13 +33,13 @@ exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/full-featured.yaml 1`] = `
 {
   "bounds": {
-    "height": 690,
-    "width": 1908,
+    "height": 654,
+    "width": 1004.0000000000001,
     "x": 0,
     "y": 0,
   },
   "groups": 4,
-  "hash": "b9e82b7518b31118",
+  "hash": "cbd51582f5b2171d",
   "nodes": 20,
   "wires": 22,
 }
@@ -49,12 +49,12 @@ exports[`the drawing of fixed networks > examples/getting-started.yaml 1`] = `
 {
   "bounds": {
     "height": 104,
-    "width": 100,
+    "width": 100.32150205761317,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "59026c14dae5f305",
+  "hash": "68763f16e966022e",
   "nodes": 2,
   "wires": 1,
 }
@@ -63,13 +63,13 @@ exports[`the drawing of fixed networks > examples/getting-started.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/location-based.yaml 1`] = `
 {
   "bounds": {
-    "height": 688,
+    "height": 534,
     "width": 580,
     "x": 0,
     "y": 0,
   },
   "groups": 7,
-  "hash": "d0139f4cc8df57d2",
+  "hash": "44ec3a8ea19f89cc",
   "nodes": 10,
   "wires": 14,
 }
@@ -78,13 +78,13 @@ exports[`the drawing of fixed networks > examples/location-based.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/netbox-enhanced.yaml 1`] = `
 {
   "bounds": {
-    "height": 253,
-    "width": 713,
+    "height": 216,
+    "width": 614,
     "x": 0,
     "y": 0,
   },
   "groups": 3,
-  "hash": "268eb75c13ff37fc",
+  "hash": "b035d419f574b70d",
   "nodes": 10,
   "wires": 10,
 }
@@ -93,13 +93,13 @@ exports[`the drawing of fixed networks > examples/netbox-enhanced.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/prefix-subgraph.yaml 1`] = `
 {
   "bounds": {
-    "height": 572,
-    "width": 700.3125,
+    "height": 530,
+    "width": 700.0000000000001,
     "x": 0,
     "y": 0,
   },
   "groups": 4,
-  "hash": "50e790566f84cd74",
+  "hash": "85d8f2913bbf3365",
   "nodes": 13,
   "wires": 12,
 }
@@ -153,13 +153,13 @@ exports[`the drawing of fixed networks > fixtures/aggregate-addresses-unpaired.y
 exports[`the drawing of fixed networks > fixtures/as-border.yaml 1`] = `
 {
   "bounds": {
-    "height": 286,
-    "width": 550,
+    "height": 150,
+    "width": 690,
     "x": 0,
     "y": 0,
   },
   "groups": 1,
-  "hash": "29d0f7868eedd84f",
+  "hash": "ea69db8209fcbff0",
   "nodes": 6,
   "wires": 3,
 }
@@ -174,7 +174,7 @@ exports[`the drawing of fixed networks > fixtures/cable-types.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "7cfd26f9b1de8648",
+  "hash": "2d0d45e4fb8bdc06",
   "nodes": 3,
   "wires": 2,
 }
@@ -183,13 +183,13 @@ exports[`the drawing of fixed networks > fixtures/cable-types.yaml 1`] = `
 exports[`the drawing of fixed networks > fixtures/cloud-vpc.yaml 1`] = `
 {
   "bounds": {
-    "height": 192,
-    "width": 770,
+    "height": 188,
+    "width": 760,
     "x": 0,
     "y": 0,
   },
   "groups": 3,
-  "hash": "2376f03e2af9f54c",
+  "hash": "bb8d6b9283c7a910",
   "nodes": 7,
   "wires": 3,
 }
@@ -219,7 +219,7 @@ exports[`the drawing of fixed networks > fixtures/l3-adjacency-through-segment.y
     "y": 0,
   },
   "groups": 0,
-  "hash": "889a97bb5a684879",
+  "hash": "9eb79bf9e9cc3e37",
   "nodes": 3,
   "wires": 2,
 }
@@ -264,7 +264,7 @@ exports[`the drawing of fixed networks > fixtures/link-virtual.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "c47438e2f6cbb806",
+  "hash": "f9f5a2b3182369f8",
   "nodes": 2,
   "wires": 1,
 }
@@ -304,12 +304,12 @@ exports[`the drawing of fixed networks > fixtures/node-unconfirmed.yaml 1`] = `
 {
   "bounds": {
     "height": 104,
-    "width": 100,
+    "width": 100.32150205761317,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "96ca8b4847c3ff9f",
+  "hash": "9c65a9423676838b",
   "nodes": 2,
   "wires": 1,
 }
@@ -363,13 +363,13 @@ exports[`the drawing of fixed networks > fixtures/product-maker-unknown.yaml 1`]
 exports[`the drawing of fixed networks > fixtures/rate-contracted.yaml 1`] = `
 {
   "bounds": {
-    "height": 124,
+    "height": 104,
     "width": 230,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "54e8560da561b798",
+  "hash": "31d4b1901f4514c5",
   "nodes": 3,
   "wires": 3,
 }
@@ -424,12 +424,12 @@ exports[`the drawing of fixed networks > fixtures/segment-dual-stack.yaml 1`] = 
 {
   "bounds": {
     "height": 104,
-    "width": 230,
+    "width": 250,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "53add6c0088f22ae",
+  "hash": "6f26740a43160af3",
   "nodes": 4,
   "wires": 3,
 }
@@ -469,12 +469,12 @@ exports[`the drawing of fixed networks > fixtures/shownet-external.yaml 1`] = `
 {
   "bounds": {
     "height": 278,
-    "width": 1514,
+    "width": 1514.0000000000002,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "95616f82ad2b86c8",
+  "hash": "570437ee2f8e2708",
   "nodes": 22,
   "wires": 20,
 }
@@ -513,13 +513,13 @@ exports[`the drawing of fixed networks > fixtures/two-addresses-one-segment.yaml
 exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yaml 1`] = `
 {
   "bounds": {
-    "height": 70,
-    "width": 475,
+    "height": 80,
+    "width": 480,
     "x": 0,
     "y": 0,
   },
   "groups": 1,
-  "hash": "ba892b312a8c98c7",
+  "hash": "4c04aff62ed365d4",
   "nodes": 4,
   "wires": 0,
 }
@@ -558,13 +558,13 @@ exports[`the drawing of fixed networks > fixtures/vrf.yaml 1`] = `
 exports[`the drawing of fixed networks > generated:30 1`] = `
 {
   "bounds": {
-    "height": 886,
-    "width": 1320,
+    "height": 600,
+    "width": 2050,
     "x": 0,
     "y": 0,
   },
   "groups": 1,
-  "hash": "7775c1389810fa3f",
+  "hash": "61b7a2c38aafe0a4",
   "nodes": 30,
   "wires": 39,
 }
@@ -573,13 +573,13 @@ exports[`the drawing of fixed networks > generated:30 1`] = `
 exports[`the drawing of fixed networks > generated:60 1`] = `
 {
   "bounds": {
-    "height": 1596,
-    "width": 3652,
+    "height": 826,
+    "width": 4260,
     "x": 0,
     "y": 0,
   },
   "groups": 2,
-  "hash": "2cfa6cc2d766abcf",
+  "hash": "07e01c96e3577103",
   "nodes": 60,
   "wires": 79,
 }
@@ -588,13 +588,13 @@ exports[`the drawing of fixed networks > generated:60 1`] = `
 exports[`the drawing of fixed networks > random:1 1`] = `
 {
   "bounds": {
-    "height": 196,
+    "height": 216,
     "width": 620,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "2469d50e3999d8d5",
+  "hash": "07316e9b1fa035f0",
   "nodes": 9,
   "wires": 9,
 }
@@ -603,13 +603,13 @@ exports[`the drawing of fixed networks > random:1 1`] = `
 exports[`the drawing of fixed networks > random:2 1`] = `
 {
   "bounds": {
-    "height": 308,
-    "width": 1270,
+    "height": 328,
+    "width": 1270.000297944998,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "c5a7018c3386c4f1",
+  "hash": "58b3103fa8d4bcb7",
   "nodes": 16,
   "wires": 16,
 }
@@ -624,7 +624,7 @@ exports[`the drawing of fixed networks > random:3 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "000e0500d04a7265",
+  "hash": "c4753dddbc1fce75",
   "nodes": 11,
   "wires": 11,
 }
@@ -634,12 +634,12 @@ exports[`the drawing of fixed networks > random:4 1`] = `
 {
   "bounds": {
     "height": 314,
-    "width": 1400,
+    "width": 1400.0184025912997,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "38ad49d8a51fb8cc",
+  "hash": "9bebcacc21947c7b",
   "nodes": 18,
   "wires": 18,
 }
@@ -649,12 +649,12 @@ exports[`the drawing of fixed networks > random:5 1`] = `
 {
   "bounds": {
     "height": 428,
-    "width": 1028,
+    "width": 1028.0000000000002,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "10f3a350e5216608",
+  "hash": "4ba31c4a120d9e4c",
   "nodes": 13,
   "wires": 13,
 }
@@ -664,12 +664,12 @@ exports[`the drawing of fixed networks > random:6 1`] = `
 {
   "bounds": {
     "height": 196,
-    "width": 768,
+    "width": 768.5144045644587,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "7562882aee30a158",
+  "hash": "54cd9014e044c10b",
   "nodes": 10,
   "wires": 10,
 }
@@ -678,13 +678,13 @@ exports[`the drawing of fixed networks > random:6 1`] = `
 exports[`the drawing of fixed networks > sample 1`] = `
 {
   "bounds": {
-    "height": 891,
-    "width": 904.6831275720165,
+    "height": 752,
+    "width": 1140,
     "x": 0,
     "y": 0,
   },
   "groups": 9,
-  "hash": "77eb5969eab87fe3",
+  "hash": "cfdb2332d5a3c212",
   "nodes": 20,
   "wires": 22,
 }

@@ -143,13 +143,15 @@ order, corridors, routes, line order) is decided from relations before any coord
 coordinates are then solved once per axis. Up/down is measured from the boundary, which
 `boundaryOf` (`drawing/draw.ts`) decides in this order, an earlier step winning: (1)
 `drawing.settings.boundary` (no YAML field or UI sets it today; only code that builds the
-model); (2) the structure's candidates, the nodes with both a cable and a
-virtual link (`structure/orientation.ts`); (3) `type: external` / `cloud` nodes and the routing
-domains that links reach (`type: internet` is not included); (4) for each connected part that
-none of (1)-(3) reaches, a guessed upstream (`drawing/upstream.ts`): by node type (router /
-firewall / vpn / cpe, then l3-switch / load-balancer, then l2-switch, then access-point), else
-the node(s) ending the fastest link, else the graph centre. (4) applies per part, also when
-other parts have a boundary; a lone node gets nothing.
+model); (2) `type: internet` / `external` / `cloud` nodes and the routing domains that links
+reach; (3) for each part the cables join that neither reaches, one guessed top
+(`drawing/upstream.ts`): the first rung of the type ladder present (router, then firewall / vpn /
+cpe, then l3-switch / load-balancer, then l2-switch, then access-point), else the node(s) ending
+the fastest link, else every node, and of those the most central. (3) applies per part, also when
+other parts have a boundary; a lone node gets nothing. A node with both a cable and a virtual link
+is not taken as a top. Two linked nodes as far from the top are put one above the other by device
+tier (`TIERS` in `drawing/problem.ts`); only a pair the types do not tell apart stands side by
+side. Every group is a frame in the one drawing; no group is solved on its own.
 - `layoutNetwork(model, { metrics })` - a `NetworkModel` → `Drawing`: the `Scene` (boxes, ports,
   wires) and the `Arrangement` it was solved from (each frame's children left to right with the
   rows they hold, by id, no coordinate; plus `unmet`, the order hints the structure overrode).

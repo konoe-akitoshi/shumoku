@@ -217,6 +217,9 @@ interface StoredLinkMapping {
 // 39: lines are drawn two strokes and a half wide per decade of speed, not a stroke and a half.
 // 40: lines straight across between two level boxes stay straight where the boxes' middles cannot
 // stand level too, and lines bent between two boxes turn in an order that crosses nothing.
+// 41: two linked devices as far from the top are put one above the other by device tier, the top
+// is guessed once per cabled part, groups are drawn in the one pass (no leaf group solved on its
+// own), ports stand about the middle of their edge.
 /**
  * Bumped whenever registration would give stored contributions entities they lack, so the startup
  * backfill registers them again (adopt-or-mint is idempotent). 2: a line whose end names no port is
@@ -225,7 +228,7 @@ interface StoredLinkMapping {
  */
 const REGISTRY_BACKFILL_VERSION = '2'
 
-const RESOLVER_VERSION = 40
+const RESOLVER_VERSION = 41
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

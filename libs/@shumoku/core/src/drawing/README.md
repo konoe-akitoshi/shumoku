@@ -43,14 +43,19 @@ that gives anything wins, except that the guess in step 4 is always added for th
 
 1. `drawing.settings.boundary` (no YAML field or UI sets it today; only code that builds the
    model);
-2. `external` / `cloud` nodes and the routing domains that links reach, which the input itself
-   says lie outside;
-3. the structure's candidates (a node with both a cable and a virtual link), only where the input
-   names nothing outside: a source such as NetBox gives many virtual links (tunnels, VM
-   interfaces, L2VPNs), and those must not outrank the transit and exchange it also names;
-4. for each part of the network that none of these reaches, a guessed upstream
-   ([upstream.ts](upstream.ts)): the type ladder (router before switch before AP), then the
-   fastest link, then the centre of the part.
+2. `internet` / `external` / `cloud` nodes and the routing domains that links reach, which the
+   input itself says lie outside;
+3. for each part the cables join that none of these reaches, one guessed top
+   ([upstream.ts](upstream.ts)): the first rung of the type ladder present (router before
+   firewall before switch before AP), else the fastest link, else every node; of those, the most
+   central. A node with both a cable and a virtual link is not a top: hypervisors, switches with a
+   logical uplink and routers with a tunnel all are.
+
+Up and down are then measured from the top. Two linked items as far from it are put one above
+the other by device tier (`TIERS` in [problem.ts](problem.ts)): the hop count ties by chance (any
+triangle has such a side), so only a pair the types do not tell apart is `level` and stands side
+by side. Every group is a frame of the one drawing, spanning the rows it holds; nothing is solved
+on its own and set in afterwards.
 
 ## Hosting
 
