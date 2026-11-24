@@ -16,7 +16,7 @@ import { type Layers, layersOf } from './layers.js'
 import { heldLevels, levelClasses } from './level.js'
 import type { Metrics } from './metrics.js'
 import { needsOf } from './needs.js'
-import { type FrameId, type Problem, ROOT, readProblem } from './problem.js'
+import { type Problem, readProblem } from './problem.js'
 import { type Ranks, ranksOf } from './ranks.js'
 import { type Routes, routesOf } from './routes.js'
 import type { Scene } from './scene.js'
@@ -100,19 +100,8 @@ export function layoutParts(
 ): Parts {
   const timings: Record<string, number> = {}
   const timed = clockOf(timings)
+  const intent = hints.siblings
   const problem = timed('problem', () => readProblem(network, structure, metrics, modelLayers))
-  const intent = intentFor(hints.siblings, problem.frames, hints.siblings?.[ROOT])
-  return layoutProblem(problem, intent, timings, timed)
-}
-
-/** The ranks of a problem, with the rows of its wide fans settled. */
-interface Settled {
-  order: Map<FrameId, string[]>
-  folds: Fold
-  ranks: Ranks
-}
-
-function rankStage(problem: Problem, intent: OrderIntent | undefined, timed: Clock): Settled {
   const { order } = orderKeysOf(problem, intent)
   // the ranks the flows give, then again with the rows a wide fan folds into as floors
   let folds: Fold = { rank: new Map(), under: new Map(), fans: [] }
@@ -121,26 +110,6 @@ function rankStage(problem: Problem, intent: OrderIntent | undefined, timed: Clo
     folds = foldsOf(problem, flat, order)
     return folds.rank.size === 0 ? flat : ranksOf(problem, { rank: folds.rank, fans: folds.fans })
   })
-  return { order, folds, ranks }
-}
-
-/** The stages for one flat problem, from the ranks to the scene. */
-function layoutProblem(
-  problem: Problem,
-  intent: OrderIntent | undefined,
-  timings: Record<string, number>,
-  timed: Clock,
-): Parts {
-  return stagesFrom(problem, rankStage(problem, intent, timed), intent, timings, timed)
-}
-
-function stagesFrom(
-  problem: Problem,
-  { order, folds, ranks }: Settled,
-  intent: OrderIntent | undefined,
-  timings: Record<string, number>,
-  timed: Clock,
-): Parts {
   const layers = timed('layers', () => layersOf(problem, ranks, { order, under: folds.under }))
   const arrangement = arrangementOf(problem, ranks, layers, intent)
   const corridors = timed('corridors', () => corridorsOf(problem, layers))
@@ -170,19 +139,6 @@ function stagesFrom(
     timings,
     unrelated: sized.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
   }
-}
-
-/** The order a person gave for the frames of a problem; `own` is for its root. */
-function intentFor(
-  siblings: OrderIntent | undefined,
-  frames: Problem['frames'],
-  own: readonly string[] | undefined,
-): OrderIntent | undefined {
-  const entries = frames.flatMap((f): [FrameId, readonly string[]][] => {
-    const names = f.id === ROOT ? own : siblings?.[f.id]
-    return names ? [[f.id, names]] : []
-  })
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
 /** How many times the coordinates are solved again, letting levels go or bending lines, at most. */

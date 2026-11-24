@@ -12,6 +12,7 @@ import { slotOf } from './ground.js'
 import { drawnInPlace, hostBox, hostingOf, poolFrameId, poolsByPlace } from './hosting.js'
 import type { SideKey } from './keys.js'
 import type { Box, Insets, Metrics, PortSideLayout, Size } from './metrics.js'
+import { tierOfType } from './tiers.js'
 
 /**
  * The drawing layout's input, in the layout's own terms: boxes inside frames, and the order,
@@ -540,21 +541,6 @@ export function readProblem(
 }
 
 /**
- * Device types by how near the way out of a network they stand, nearest first: of two linked
- * devices the structure leaves level, the one of the nearer tier is drawn above.
- */
-const TIERS: readonly (readonly string[])[] = [
-  ['internet', 'external', 'cloud'],
-  ['router'],
-  ['firewall', 'vpn', 'cpe'],
-  ['l3-switch', 'load-balancer'],
-  ['l2-switch'],
-  ['access-point'],
-  ['server', 'database', 'console-server'],
-]
-const tierOfType = new Map(TIERS.flatMap((types, tier) => types.map((t) => [t, tier] as const)))
-
-/**
  * An item's tier (`TIERS`), from the type its nodes share; `undefined` where none is written or
  * they differ, or for an item that is no device.
  */
@@ -562,7 +548,7 @@ function tierOf(item: Item): number | undefined {
   const nodes =
     item.kind === 'unit' ? item.members.map((m) => m.node) : item.kind === 'card' ? [item.node] : []
   const tiers = new Set(
-    nodes.map((n) => (n.spec && 'type' in n.spec ? tierOfType.get(n.spec.type ?? '') : undefined)),
+    nodes.map((n) => (n.spec && 'type' in n.spec ? tierOfType(n.spec.type) : undefined)),
   )
   const [only] = tiers
   return tiers.size === 1 ? only : undefined
@@ -574,7 +560,7 @@ function tierOf(item: Item): number | undefined {
  * item), or nothing is said. A chain through a shared item is the structure's own statement;
  * nothing is added to it.
  */
-export function relation(
+function relation(
   above: readonly Above[],
   level: readonly Level[],
 ): (a: ItemId, b: ItemId) => Flow | undefined {
@@ -618,7 +604,7 @@ export function relation(
  * structure promises none; a cycle would leave no height to give, so it is cut here, at the
  * direction met last in id order, rather than let a layer fail on it.
  */
-export function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] } {
+function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] } {
   const parent = new Map<string, string>()
   const find = (x: string): string => {
     const p = parent.get(x) ?? x
@@ -666,7 +652,7 @@ export function linesById(problem: Pick<Problem, 'lines'>): ReadonlyMap<string, 
 /** The box an end is on: its node, else its item. */
 export const boxKey = (end: End): string => end.node ?? end.item
 
-export function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
+function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
   const at = new Map<string, Line[]>()
   for (const line of lines) {
     if (line.role === 'inside') continue

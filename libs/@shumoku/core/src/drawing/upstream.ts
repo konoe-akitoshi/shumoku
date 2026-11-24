@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type * as input from '../input/model.js'
+import { isTopTier, TIERS, tierOfType } from './tiers.js'
 
 /**
  * Where to measure up and down from in the parts of a network that nothing names a boundary
@@ -11,7 +12,7 @@ import type * as input from '../input/model.js'
  *
  * Each part that is joined by links (or by a guest's host) and holds none of `named` is given
  * the nodes the first of these tells apart, and nothing when the part is a single node:
- * - the kind of node, by how near the way out a network usually puts it (`LADDER`);
+ * - the kind of node, by how near the way out a network usually puts it (`TIERS`);
  * - the fastest link a node ends, the backbone being faster than the edge;
  * - every node.
  * Of those, the most central are the top (the nodes from which the farthest node is nearest): a
@@ -35,24 +36,14 @@ export function upstreamOf(network: input.Network, named: readonly string[]): st
   return out
 }
 
-/**
- * Node types by how near the way out of a network they usually stand, nearest first. What lies
- * beyond the network (internet, external, cloud) is named as a boundary before this is asked.
- */
-const LADDER: readonly (readonly string[])[] = [
-  ['router'],
-  ['firewall', 'vpn', 'cpe'],
-  ['l3-switch', 'load-balancer'],
-  ['l2-switch'],
-  ['access-point'],
-]
-
-const rungOf = new Map(LADDER.flatMap((types, rung) => types.map((t) => [t, rung] as const)))
-
+/** The nodes of the first tier (`TIERS`) present, of those a top may be guessed among. */
 function byLadder(network: input.Network, nodes: readonly string[]): string[] | undefined {
   const type = new Map(network.nodes.map((n) => [n.id, n.type]))
-  const rung = (id: string) => rungOf.get(type.get(id) ?? '') ?? LADDER.length
-  return best(nodes, (id) => -rung(id), -LADDER.length)
+  const rung = (id: string) => {
+    const tier = tierOfType(type.get(id))
+    return tier !== undefined && isTopTier(tier) ? tier : TIERS.length
+  }
+  return best(nodes, (id) => -rung(id), -TIERS.length)
 }
 
 /** A rate in bits per second; `10G` is ten thousand million. */
