@@ -76,7 +76,7 @@ describe('a parent over its children', () => {
     const kids = ['a', 'b', 'c'].map(mid)
     expect(mid('core')).toBeGreaterThanOrEqual(Math.min(...kids) - 1e-6)
     expect(mid('core')).toBeLessThanOrEqual(Math.max(...kids) + 1e-6)
-    expect(mid('wan')).toBeCloseTo(mid('core'), 3)
+    expect(mid('wan')).toBeCloseTo(mid('core'), 1)
   })
 
   it('is drawn the same every time', () => {

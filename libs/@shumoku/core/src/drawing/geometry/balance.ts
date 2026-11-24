@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { splitSide } from '../keys.js'
 import type { Plan } from './plan.js'
 import { type Axis, type Constraints, none } from './system.js'
 
@@ -35,4 +36,31 @@ export function balanceOf(plan: Pick<Plan, 'problem'>, xAxis: Axis): Constraints
       w: BALANCE_WEIGHT,
     })),
   }
+}
+
+/**
+ * How hard a port on a top or bottom edge is drawn to the middle of its edge, against 1 for a run
+ * pulled short. Weaker than the balance of boxes: a line made straight, a run kept short or a box
+ * centred always wins, and this only decides where a port stands when nothing else does.
+ */
+export const PORT_MIDDLE_WEIGHT = 0.1
+
+/**
+ * The weak pulls that stand the ports of a top or bottom edge about the middle of their box. A
+ * port whose line runs straight to its other end is held by nothing but its neighbours and the
+ * edge's margins; without this the packing put it at the very end of the edge, and two such ports
+ * on boxes stacked one over the other could stand at one x and their lines run on each other.
+ */
+export function portMiddlesOf(plan: Pick<Plan, 'problem' | 'tracks'>, xAxis: Axis): Constraints {
+  const pair: Constraints['pair'] = []
+  for (const [k, list] of plan.tracks.ports) {
+    const { box, side } = splitSide(k)
+    if (side !== 'top' && side !== 'bottom') continue
+    const mid = xAxis.midRef(box)
+    for (const id of list) {
+      const port = xAxis.at({ kind: 'port', id })
+      pair.push({ i: mid.v, j: port.v, d: mid.off - port.off, w: PORT_MIDDLE_WEIGHT })
+    }
+  }
+  return pair.length === 0 ? none : { sep: [], equal: [], pair }
 }
