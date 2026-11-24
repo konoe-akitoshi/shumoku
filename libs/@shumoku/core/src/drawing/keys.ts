@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { joinKey, splitKey } from '../structure/keys.js'
+import { InvariantError } from './must.js'
 import type { FrameId } from './problem.js'
 import type { Side } from './scene.js'
 
@@ -55,7 +56,7 @@ export const sideKey = (box: string, side: Side): SideKey => mint(joinKey([box, 
 export function splitSide(key: SideKey): { box: string; side: Side } {
   const [box, raw] = splitKey(key)
   const side = SIDES.find((s) => s === raw)
-  if (box === undefined || side === undefined) throw new Error(`not a side key: ${key}`)
+  if (box === undefined || side === undefined) throw new InvariantError(`not a side key: ${key}`)
   return { box, side }
 }
 

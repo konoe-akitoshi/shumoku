@@ -22,5 +22,6 @@ export type {
   PortSide,
   PortSideLayout,
 } from './metrics.js'
-export type { Scene, Side } from './scene.js'
+export { InvariantError } from './must.js'
+export type { DrawingIssue, Scene, Side } from './scene.js'
 export { EPS } from './tolerance.js'

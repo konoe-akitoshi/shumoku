@@ -140,6 +140,9 @@ export function publicScene(scene: DrawingScene): DrawingScene {
     nodes: scene.nodes.map((n) => ({ ...n, node: publicNode(n.node) })),
     groups: scene.groups.map((g) => ({ ...g, group: publicSubgraph(g.group) })),
     wires: scene.wires.map((w) => ({ ...w, link: publicLink(w.link) })),
+    ...(scene.issues && {
+      issues: scene.issues.map((i) => ('link' in i ? { ...i, link: publicLink(i.link) } : i)),
+    }),
   }
 }
 

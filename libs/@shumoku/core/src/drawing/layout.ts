@@ -12,14 +12,16 @@ import { type Corridors, corridorsOf } from './corridors.js'
 import { diagonalsOf } from './diagonals.js'
 import { foldsOf } from './fold.js'
 import { type Placed, placeAll } from './geometry.js'
+import { varKey } from './keys.js'
 import { type Layers, layersOf } from './layers.js'
 import { heldLevels, levelClasses } from './level.js'
 import type { Metrics } from './metrics.js'
+import { InvariantError, must } from './must.js'
 import { needsOf } from './needs.js'
 import { type Problem, readProblem } from './problem.js'
 import { type Ranks, ranksOf } from './ranks.js'
 import { type Routes, routesOf } from './routes.js'
-import type { Scene } from './scene.js'
+import type { DrawingIssue, Scene } from './scene.js'
 import { type Tracks, tracksOf } from './tracks.js'
 
 /**
@@ -114,19 +116,31 @@ export function layoutParts(
   const layers = timed('layers', () => layersOf(problem, ranks, { order, under: folds.under }))
   const arrangement = arrangementOf(problem, ranks, layers, intent)
   const corridors = timed('corridors', () => corridorsOf(problem, layers))
-  const routes = timed('routes', () => routesOf(problem, layers, corridors))
-  const { tracks, sized, placed } = timed('geometry', () =>
-    placeBending(problem, ranks, layers, corridors, routes),
+  const walked = timed('routes', () => routesOf(problem, layers, corridors))
+  const { tracks, sized, placed, routes } = timed('geometry', () =>
+    placeBending(problem, ranks, layers, corridors, walked),
   )
   const turns = timed('diagonals', () =>
     diagonalsOf(sized, placed.geometry, placed.wires, placed.ports),
   )
-  const scene = assemble(
+  const assembled = assemble(
     sized,
     placed.geometry,
     { wires: placed.wires, ports: placed.ports, turns },
     layers.members,
   )
+  const linkOf = new Map(problem.lines.map((l) => [l.id, l.link]))
+  const issues: DrawingIssue[] = [
+    ...routes.unrouted.map((id) => ({
+      code: 'no-route' as const,
+      link: must(linkOf, id, 'link of line'),
+    })),
+    ...routes.cyclic.map((id) => ({
+      code: 'constraint-cycle' as const,
+      link: must(linkOf, id, 'link of line'),
+    })),
+  ]
+  const scene = issues.length > 0 ? { ...assembled, issues } : assembled
   return {
     scene,
     arrangement,
@@ -166,7 +180,7 @@ function placeBending(
   loose: ReadonlySet<string> = new Set(),
   flipped: ReadonlySet<string> = new Set(),
   attempt = 0,
-): { tracks: Tracks; sized: Problem; placed: Placed } {
+): { tracks: Tracks; sized: Problem; placed: Placed; routes: Routes } {
   const tracks = tracksOf(problem, layers, corridors, routes, { bent, flipped })
   const sized = needsOf(problem, tracks)
   const straight = sized.lines.flatMap((l): [string, string][] =>
@@ -175,55 +189,57 @@ function placeBending(
   const held =
     loose.size === 0 ? sized : { ...sized, level: heldLevels(sized.level, straight, loose) }
   try {
-    return { tracks, sized, placed: placeAll(held, ranks, layers, corridors, tracks) }
+    return { tracks, sized, placed: placeAll(held, ranks, layers, corridors, tracks), routes }
   } catch (e) {
-    if (!(e instanceof CycleError) || attempt >= BEND_ATTEMPTS) throw e
-    const ports = new Map([...tracks.entities.values()].map((p) => [String(p.id), p]))
-    const lines = new Set<string>()
-    for (const name of e.unknowns) {
-      const port = /^[xy] p:(.*)$/.exec(name)?.[1]
-      for (const end of (port === undefined ? undefined : ports.get(port))?.ends ?? [])
-        lines.add(end.line)
-    }
-    // first, the classes of level items the ring's straight lines run within
-    const classOf = levelClasses(sized.level)
-    const release = new Set(loose)
-    for (const line of sized.lines) {
-      if (!lines.has(line.id) || !tracks.across.has(line.id)) continue
-      const c = classOf(line.a.item)
-      if (c !== undefined && c === classOf(line.b.item)) release.add(c)
-    }
-    if (release.size > loose.size)
-      return placeBending(
+    if (!(e instanceof CycleError)) throw e
+    // the lines the ring runs through: those whose chains hold its unknowns, ports and lanes alike
+    // (an unknown is named for its axis and then its coordinate, `x p:...` or `y l:...`)
+    const linesOfVar = new Map<string, string[]>()
+    for (const [line, chain] of tracks.chains)
+      for (const v of chain) linesOfVar.set(varKey(v), [...(linesOfVar.get(varKey(v)) ?? []), line])
+    const lines = new Set(e.unknowns.flatMap((name) => linesOfVar.get(name.slice(2)) ?? []))
+    const again = (next: {
+      routes?: Routes
+      bent?: ReadonlySet<string>
+      loose?: ReadonlySet<string>
+      flipped?: ReadonlySet<string>
+    }) =>
+      placeBending(
         problem,
         ranks,
         layers,
         corridors,
-        routes,
-        bent,
-        release,
-        flipped,
+        next.routes ?? routes,
+        next.bent ?? bent,
+        next.loose ?? loose,
+        next.flipped ?? flipped,
         attempt + 1,
       )
-    // then the lines themselves
-    const more = new Set([...bent, ...lines])
-    if (more.size > bent.size)
-      return placeBending(
-        problem,
-        ranks,
-        layers,
-        corridors,
-        routes,
-        more,
-        loose,
-        flipped,
-        attempt + 1,
-      )
-    // last, the bundles of bent lines turned the other way
-    const turn = new Set(flipped)
-    for (const [key, bundle] of tracks.bundles)
-      if (!flipped.has(key) && bundle.lines.some((l) => lines.has(l.line))) turn.add(key)
-    if (turn.size === flipped.size) throw e
-    return placeBending(problem, ranks, layers, corridors, routes, bent, loose, turn, attempt + 1)
+    if (attempt < BEND_ATTEMPTS) {
+      // first, the classes of level items the ring's straight lines run within
+      const classOf = levelClasses(sized.level)
+      const release = new Set(loose)
+      for (const line of sized.lines) {
+        if (!lines.has(line.id) || !tracks.across.has(line.id)) continue
+        const c = classOf(line.a.item)
+        if (c !== undefined && c === classOf(line.b.item)) release.add(c)
+      }
+      if (release.size > loose.size) return again({ loose: release })
+      // then the lines themselves
+      const more = new Set([...bent, ...lines])
+      if (more.size > bent.size) return again({ bent: more })
+      // then the bundles of bent lines turned the other way
+      const turn = new Set(flipped)
+      for (const [key, bundle] of tracks.bundles)
+        if (!flipped.has(key) && bundle.lines.some((l) => lines.has(l.line))) turn.add(key)
+      if (turn.size > flipped.size) return again({ flipped: turn })
+    }
+    // last, the ring's lines are left out and named, and the rest is drawn; a ring that no line
+    // closes is the engine's own failure, not the input's
+    const kept = new Map([...routes.routes].filter(([id]) => !lines.has(id)))
+    if (kept.size === routes.routes.size)
+      throw new InvariantError(`a ring of separations that no line closes: ${e.message}`)
+    const left = [...routes.routes.keys()].filter((id) => !kept.has(id))
+    return again({ routes: { ...routes, routes: kept, cyclic: [...routes.cyclic, ...left] } })
   }
 }

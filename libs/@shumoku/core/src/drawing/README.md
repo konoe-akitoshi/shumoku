@@ -143,6 +143,24 @@ drawn against what the stages counted. Both axes are solved by [axis.ts](axis.ts
   links in whatever order its API gives, and a sync must not redraw the diagram for that. A new
   stage that enumerates something keeps to this; `invariance.test.ts` checks it.
 
+## When something cannot be drawn
+
+Two kinds of failure, two channels:
+
+- **The input asks for what cannot be drawn.** The drawing draws the rest and names what it left
+  out in `Scene.issues` (`DrawingIssue`), by a code a viewer can show and a test can pin:
+  `no-route` (the corridors give a line no way, [routes.ts](routes.ts)), `constraint-cycle` (a
+  line still closes a ring of separations after levels were let go, lines bent and bundles turned;
+  its line is left out, `placeBending` in [layout.ts](layout.ts)), `unknown-boundary` (the
+  drawing layer names a boundary that is nothing on a line, [draw.ts](draw.ts)). The Server logs
+  them with each bake.
+- **The engine fails.** A stage misses what an earlier one made, or reaches a branch it cannot
+  (`must`, `assertNever` in [must.ts](must.ts)): it throws `InvariantError`, so the fault is found
+  rather than drawn round. Never turn one into an issue.
+
+A fixed network that draws with an issue fails `golden.test.ts`: a fallback taken is a change to
+look at, not a drawing to accept.
+
 ## Changing it safely
 
 - [golden.test.ts](golden.test.ts) pins the whole scene (a hash and a few plain numbers) of the

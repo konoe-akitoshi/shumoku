@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { InvariantError } from './must.js'
+
 /**
  * The order of lines, lower lane first, that crosses least: the sum of `cost(a, b)` over every
  * pair with `a` below `b`. Up to eight lines every order is weighed, by a search over the
@@ -101,7 +103,7 @@ export function laneOrder<L extends string>(
       const without = rest & ~(1 << r)
       if (below(r, rest) + f(without) === target) {
         const line = lines[r]
-        if (line === undefined) throw new Error(`no line ${r} among ${n} to order`)
+        if (line === undefined) throw new InvariantError(`no line ${r} among ${n} to order`)
         order.push(line)
         rest = without
         break

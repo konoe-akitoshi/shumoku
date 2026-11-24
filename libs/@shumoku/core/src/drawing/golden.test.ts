@@ -43,4 +43,9 @@ describe('the drawing of fixed networks', () => {
   it.each(cases)('%s', (_name, yaml, boundary) => {
     expect(summary(yaml, boundary)).toMatchSnapshot()
   })
+
+  // a fallback taken on a fixed network is a change to look at, not a drawing to accept
+  it.each(cases)('%s draws everything it is asked to', (_name, yaml, boundary) => {
+    expect(sceneOf(yaml, boundary).issues).toBeUndefined()
+  })
 })

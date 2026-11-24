@@ -8,7 +8,7 @@ import { deriveStages, structureOf } from '../structure/index.js'
 import type { Arrangement } from './arrangement.js'
 import { layoutParts } from './layout.js'
 import type { Metrics } from './metrics.js'
-import type { Scene } from './scene.js'
+import type { DrawingIssue, Scene } from './scene.js'
 import { isBeyond } from './tiers.js'
 import { upstreamOf } from './upstream.js'
 
@@ -42,11 +42,31 @@ export function boundaryOf(model: NetworkModel): string[] {
 }
 
 function namedBoundaryOf(model: NetworkModel): string[] {
-  const chosen = model.drawing?.settings?.boundary
-  if (chosen && chosen.length > 0) return [...chosen]
+  const { known } = boundaryNamed(model)
+  if (known.length > 0) return known
   const network = model.config
   // What the input says lies beyond the network is the top.
   return beyond(network)
+}
+
+/**
+ * The boundary the drawing layer names, split into the ids the structure can measure from (a
+ * node, or a segment or routing domain on a line) and those it cannot, which are reported and
+ * not measured from.
+ */
+function boundaryNamed(model: NetworkModel): { known: string[]; unknown: string[] } {
+  const chosen = model.drawing?.settings?.boundary ?? []
+  const network = model.config
+  const onLines = new Set([
+    ...network.nodes.map((n) => n.id),
+    ...network.links.flatMap((l) =>
+      l.endpoints.map((e) => ('node' in e ? e.node : 'segment' in e ? e.segment : e.routingDomain)),
+    ),
+  ])
+  return {
+    known: chosen.filter((id) => onLines.has(id)),
+    unknown: [...new Set(chosen.filter((id) => !onLines.has(id)))],
+  }
 }
 
 function beyond(network: input.Network): string[] {
@@ -75,7 +95,12 @@ export function layoutNetwork(model: NetworkModel, options: DrawOptions): Drawin
     layers,
     hints: { siblings: model.drawing?.order },
   })
-  return { scene: parts.scene, arrangement: parts.arrangement }
+  const unknown = boundaryNamed(model).unknown.map(
+    (id): DrawingIssue => ({ code: 'unknown-boundary', id }),
+  )
+  const issues = [...unknown, ...(parts.scene.issues ?? [])]
+  const scene = issues.length > 0 ? { ...parts.scene, issues } : parts.scene
+  return { scene, arrangement: parts.arrangement }
 }
 
 /** Draws a model as a scene: `layoutNetwork`, keeping the coordinates. */
