@@ -230,3 +230,40 @@ links:
     expect(drawNetwork(model, { metrics: () => testMetrics }).wires).toHaveLength(4)
   })
 })
+
+describe('a redundancy set and the switch its members are all cabled to', () => {
+  it('draws the switch above the set when the hop count puts them level', () => {
+    // Read from a live network (names replaced): a cluster of three hosts with no type, each
+    // cabled to two switches, `lan` above them and `fast`, which hangs off `lan` and so is as
+    // far from the top as the hosts. Level, the middle host had no side to meet `fast` by and the
+    // drawing stopped with "no way through the corridors".
+    const model = readNetworkModel(`
+groups: [{ id: site }]
+redundancy:
+  - { id: pool, nodes: [h1, h2, h3], kind: cluster }
+nodes:
+  - { id: rt, type: router, group: site }
+  - { id: edge, type: l2-switch, group: site }
+  - { id: lan, type: l2-switch, group: site }
+  - { id: fast, type: l2-switch, group: site }
+  - { id: h1, group: site }
+  - { id: h2, group: site }
+  - { id: h3, group: site }
+links:
+  - endpoints: [{ node: rt, port: p1 }, { node: edge, port: p1 }]
+  - endpoints: [{ node: edge, port: p2 }, { node: lan, port: p1 }]
+  - endpoints: [{ node: lan, port: p2 }, { node: fast, port: mgmt }]
+  - endpoints: [{ node: h1, port: nic0 }, { node: lan, port: p3 }]
+  - endpoints: [{ node: h2, port: nic0 }, { node: lan, port: p4 }]
+  - endpoints: [{ node: h3, port: nic0 }, { node: lan, port: p5 }]
+  - endpoints: [{ node: h1, port: nic1 }, { node: fast, port: x1 }]
+  - endpoints: [{ node: h2, port: nic1 }, { node: fast, port: x2 }]
+  - endpoints: [{ node: h3, port: nic1 }, { node: fast, port: x3 }]
+`)
+    const scene = drawNetwork(model, { metrics: () => testMetrics })
+    expect(scene.wires).toHaveLength(9)
+    const y = (id: string) => scene.nodes.find((n) => n.node.id === id)?.box.y ?? 0
+    expect(y('fast')).toBeLessThan(y('h2'))
+    expect(scene.ports?.find((p) => p.nodeId === 'h2' && p.name === 'nic1')?.side).toBe('top')
+  })
+})

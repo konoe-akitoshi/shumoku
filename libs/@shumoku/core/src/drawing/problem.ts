@@ -456,15 +456,23 @@ export function readProblem(
   const levelSeen = new Map<string, Level>()
   const typeWritten = new Map(network.nodes.map((n) => [n.id, n.type]))
   const tierOfItem = new Map(items.map((i) => [i.id, tierOf(i, typeWritten)]))
+  const isUnit = new Set(items.flatMap((i) => (i.kind === 'unit' ? [i.id] : [])))
   /**
    * Of two ends the structure finds as far from the boundary, the one that stands above: the one
    * of the nearer tier (`TIERS`). Where the types tell them no apart (one tier, or a type missing),
-   * they are each other's equals and stand side by side.
+   * they are each other's equals and stand side by side, except a redundancy set and what is
+   * cabled to it: the set's members already stand side by side in a row, which leaves no side to
+   * meet anything else by but the row's two ends, so what is cabled to it at its own height (the
+   * switch its members all use, say) stands above it. A virtual line (a tunnel to a branch) leaves
+   * the set by a side as before.
    */
-  const aboveOf = (a: ItemId, b: ItemId): Above | undefined => {
+  const aboveOf = (a: ItemId, b: ItemId, cabled: boolean): Above | undefined => {
     const [ta, tb] = [tierOfItem.get(a), tierOfItem.get(b)]
-    if (ta === undefined || tb === undefined || ta === tb) return undefined
-    return ta < tb ? { upper: a, lower: b } : { upper: b, lower: a }
+    if (ta !== undefined && tb !== undefined && ta !== tb)
+      return ta < tb ? { upper: a, lower: b } : { upper: b, lower: a }
+    if (cabled && isUnit.has(a) !== isUnit.has(b))
+      return isUnit.has(a) ? { upper: b, lower: a } : { upper: a, lower: b }
+    return undefined
   }
   const dropped: Above[] = []
   const planes = [...structure.planes].sort(
@@ -487,7 +495,7 @@ export function readProblem(
       const ia = vertexItem(a)
       const ib = vertexItem(b)
       if (ia === ib) continue
-      const edge = aboveOf(ia, ib)
+      const edge = aboveOf(ia, ib, plane.side === 'physical')
       if (edge === undefined) {
         const [x, y] = compare(ia, ib) <= 0 ? [ia, ib] : [ib, ia]
         levelSeen.set(joinKey([x, y]), { a: x, b: y })
