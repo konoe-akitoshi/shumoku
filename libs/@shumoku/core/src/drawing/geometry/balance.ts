@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { joinKey } from '../../structure/keys.js'
 import { splitSide } from '../keys.js'
+import type { ItemId, Problem } from '../problem.js'
 import type { Plan } from './plan.js'
 import { type Axis, type Constraints, none } from './system.js'
 
@@ -17,13 +19,50 @@ import { type Axis, type Constraints, none } from './system.js'
 export const BALANCE_WEIGHT = 0.5
 
 /**
+ * How much of its weight a pull keeps where it draws a box that hands over to several towards
+ * what stands above it: the run its line comes by, and its middle under the middle of the box
+ * above. The pulls are least squares, so one long run up outweighed several short ones down, and
+ * a switch slid from over its access points towards its uplink until the wall of its frame
+ * stopped it. Which boxes these are is read from the relations (`headsOf`), before any
+ * coordinate; the weight only says that standing over those below comes first. It is not
+ * nothing, so the run still follows the box and a box over such boxes still stands over them.
+ */
+export const UPWARD_WEIGHT = 0.02
+
+/**
+ * The boxes that hand over to two or more ends of the flow (boxes that hand over to nothing, an
+ * access switch's access points): each stands over its fan, whatever it is handed over by. A box
+ * whose lower boxes hand over further is not held so; it stands where the rest of the drawing
+ * pulls it, as boxes cabled across to two others do.
+ */
+export function headsOf(problem: Pick<Problem, 'above'>): ReadonlySet<ItemId> {
+  const below = new Map<ItemId, ItemId[]>()
+  for (const { upper, lower } of problem.above)
+    below.set(upper, [...(below.get(upper) ?? []), lower])
+  return new Set(
+    [...below]
+      .filter(([, lows]) => lows.length >= 2 && lows.every((l) => !below.has(l)))
+      .map(([item]) => item),
+  )
+}
+
+/** An upper and a lower item as one key, for the pairs whose line bends up into a head. */
+export const pairKey = (upper: ItemId, lower: ItemId): string => joinKey([upper, lower])
+
+/**
  * The weak pulls that centre a box on those it is linked to down the flow: for every pair the
  * structure puts one above the other, the middles of the two are drawn together. Least squares,
  * so a box with several below it comes to the mean of their middles and each of those to the
- * middle of those above it. A frame has no middle of its own and follows what it holds. The pairs
- * are taken in the order of `problem.above`, which is sorted.
+ * middle of those above it, except that a pair in `bentUp` (its line bends on its way into a box
+ * that hands over to several) is drawn together only by `UPWARD_WEIGHT` of that. A frame has no
+ * middle of its own and follows what it holds. The pairs are taken in the order of
+ * `problem.above`, which is sorted.
  */
-export function balanceOf(plan: Pick<Plan, 'problem'>, xAxis: Axis): Constraints {
+export function balanceOf(
+  plan: Pick<Plan, 'problem'>,
+  xAxis: Axis,
+  bentUp: ReadonlySet<string> = new Set(),
+): Constraints {
   const { above } = plan.problem
   if (above.length === 0) return none
   return {
@@ -33,7 +72,7 @@ export function balanceOf(plan: Pick<Plan, 'problem'>, xAxis: Axis): Constraints
       i: xAxis.midRef(upper).v,
       j: xAxis.midRef(lower).v,
       d: xAxis.midRef(upper).off - xAxis.midRef(lower).off,
-      w: BALANCE_WEIGHT,
+      w: bentUp.has(pairKey(upper, lower)) ? BALANCE_WEIGHT * UPWARD_WEIGHT : BALANCE_WEIGHT,
     })),
   }
 }

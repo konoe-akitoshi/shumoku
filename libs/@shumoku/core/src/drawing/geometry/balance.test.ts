@@ -10,7 +10,7 @@ import { boundaryOf, drawNetwork } from '../draw.js'
 import { axesOf } from '../geometry.js'
 import { planningOf } from '../testing/stages.js'
 import { testMetrics } from '../testing/support.js'
-import { BALANCE_WEIGHT, balanceOf } from './balance.js'
+import { BALANCE_WEIGHT, balanceOf, headsOf } from './balance.js'
 
 const fan = `
 nodes:
@@ -83,5 +83,52 @@ describe('a parent over its children', () => {
     const draw = () =>
       JSON.stringify(drawNetwork(readNetworkModel(fan), { metrics: () => testMetrics }).nodes)
     expect(draw()).toBe(draw())
+  })
+})
+
+describe('a switch over its access points', () => {
+  // the uplink comes from far to the left; the switch still stands over its four access points
+  const yaml = `
+nodes:
+  - { id: core, type: router }
+  - { id: far, type: l2-switch }
+  - { id: x1, type: server }
+  - { id: x2, type: server }
+  - { id: x3, type: server }
+  - { id: sw, type: l2-switch }
+  - { id: ap1, type: access-point }
+  - { id: ap2, type: access-point }
+  - { id: ap3, type: access-point }
+  - { id: ap4, type: access-point }
+links:
+  - endpoints: [{ node: core, port: p1 }, { node: far, port: up }]
+  - endpoints: [{ node: far, port: p1 }, { node: x1, port: e }]
+  - endpoints: [{ node: far, port: p2 }, { node: x2, port: e }]
+  - endpoints: [{ node: far, port: p3 }, { node: x3, port: e }]
+  - endpoints: [{ node: core, port: p2 }, { node: sw, port: up }]
+  - endpoints: [{ node: sw, port: e1 }, { node: ap1, port: up }]
+  - endpoints: [{ node: sw, port: e2 }, { node: ap2, port: up }]
+  - endpoints: [{ node: sw, port: e3 }, { node: ap3, port: up }]
+  - endpoints: [{ node: sw, port: e4 }, { node: ap4, port: up }]
+`
+  it('stands centred over them, not over the first', () => {
+    const scene = drawNetwork(readNetworkModel(yaml), { metrics: () => testMetrics })
+    const mid = (id: string) => {
+      const b = scene.nodes.find((n) => n.node.id === id)?.box
+      return (b?.x ?? Number.NaN) + (b?.width ?? 0) / 2
+    }
+    const kids = ['ap1', 'ap2', 'ap3', 'ap4'].map(mid)
+    const centre = kids.reduce((a, b) => a + b, 0) / kids.length
+    expect(Math.abs(mid('sw') - centre)).toBeLessThan(10)
+  })
+
+  it('names only boxes over two or more ends of the flow as fan heads', () => {
+    const above = [
+      { upper: 'core', lower: 'far' },
+      { upper: 'far', lower: 'x1' },
+      { upper: 'far', lower: 'x2' },
+      { upper: 'core', lower: 'sw' },
+    ]
+    expect([...headsOf({ above })]).toEqual(['far'])
   })
 })

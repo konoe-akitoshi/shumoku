@@ -111,7 +111,9 @@ order into rows with places.
 Inside **geometry**: `plan` collects what the axes read; `system` makes each axis (its unknowns,
 numbered up front, and what frames ask of them); `widths` and `x` lay the horizontal separations,
 make frames as narrow as they can be, and let `align` (Brandes and Koepf) straighten lines where
-the ledger of equalities allows; [lane-order.ts](lane-order.ts) then orders the runs along each
+the ledger of equalities allows (a box with the middle of what it hands over to, and a fan head
+(`headsOf`, a box over two or more ends of the flow) over the middle of its fan, its uplink pulled
+only weakly); [lane-order.ts](lane-order.ts) then orders the runs along each
 row from the solved widths; `y` lays flows, **rank bands**, the runs between what lies over and
 under them, and ports; [geometry/audit.ts](geometry/audit.ts) counts the crossings that were
 drawn against what the stages counted. Both axes are solved by [axis.ts](axis.ts).
