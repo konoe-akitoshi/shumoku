@@ -19,12 +19,12 @@ exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
 {
   "bounds": {
     "height": 706,
-    "width": 561.8362640391746,
+    "width": 562.7080442254756,
     "x": 0,
     "y": 0,
   },
   "groups": 7,
-  "hash": "2f0b6328c05f8988",
+  "hash": "e521d41f88cc9b00",
   "nodes": 14,
   "wires": 12,
 }
@@ -33,13 +33,13 @@ exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/full-featured.yaml 1`] = `
 {
   "bounds": {
-    "height": 656,
-    "width": 992,
+    "height": 654,
+    "width": 1004.0000000000001,
     "x": 0,
     "y": 0,
   },
   "groups": 4,
-  "hash": "423ca776085ba729",
+  "hash": "4bb328dd65c93aa2",
   "nodes": 20,
   "wires": 22,
 }
@@ -93,13 +93,13 @@ exports[`the drawing of fixed networks > examples/netbox-enhanced.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/prefix-subgraph.yaml 1`] = `
 {
   "bounds": {
-    "height": 530,
-    "width": 700,
+    "height": 536,
+    "width": 700.0000000000001,
     "x": 0,
     "y": 0,
   },
   "groups": 4,
-  "hash": "c274f2ac12db30c7",
+  "hash": "27d595769c5555bb",
   "nodes": 13,
   "wires": 12,
 }
@@ -649,12 +649,12 @@ exports[`the drawing of fixed networks > random:5 1`] = `
 {
   "bounds": {
     "height": 400,
-    "width": 1021.4223621664316,
+    "width": 1028,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "a38e7402a409fffd",
+  "hash": "6542bd24881da008",
   "nodes": 13,
   "wires": 13,
 }
@@ -664,12 +664,12 @@ exports[`the drawing of fixed networks > random:6 1`] = `
 {
   "bounds": {
     "height": 196,
-    "width": 750.0135558479013,
+    "width": 768.0135558479013,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "a58dbd369eb53061",
+  "hash": "2491106be25e6f21",
   "nodes": 10,
   "wires": 10,
 }

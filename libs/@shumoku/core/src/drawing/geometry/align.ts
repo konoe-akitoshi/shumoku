@@ -53,6 +53,7 @@ const sideOf = (plan: Pick<Plan, 'tracks'>, v: Var) =>
 function linksByLower(
   plan: Pick<Plan, 'tracks' | 'corridors'>,
   steps: readonly Step[],
+  heads: ReadonlySet<string>,
 ): Map<string, Link[]> {
   const linksOf = new Map<string, Link[]>()
   for (const st of steps) {
@@ -60,9 +61,9 @@ function linksByLower(
     if (!ea || !eb || Math.abs(ea.rank - eb.rank) !== 1) continue
     const [upper, lower, up, low] = ea.rank < eb.rank ? [st.a, st.b, ea, eb] : [st.b, st.a, eb, ea]
     if (sideOf(plan, upper) !== undefined && sideOf(plan, upper) !== 'bottom') continue
-    // a line that comes down a column has turned already; it is not held straight into the box
-    // below, which stands over what it hands over to instead
-    if (upper.kind === 'lane' && lower.kind === 'port') continue
+    // a line that comes down a column into a fan head has turned already; it is not held
+    // straight into the head, which stands over its fan instead
+    if (upper.kind === 'lane' && lower.kind === 'port' && heads.has(low.key)) continue
     if (sideOf(plan, lower) !== undefined && sideOf(plan, lower) !== 'top') continue
     linksOf.set(low.key, [...(linksOf.get(low.key) ?? []), { upper, lower, up, low }])
   }
@@ -145,9 +146,10 @@ export function alignDown(
   steps: readonly Step[],
   held: Ledger,
 ): Sep[] {
-  const linksOf = linksByLower(plan, steps)
+  const heads = headsOf(plan.problem)
+  const linksOf = linksByLower(plan, steps, heads)
   const lowerElems = lowerElements(plan, linksOf)
-  const middles = middlesBelow(linksOf, headsOf(plan.problem))
+  const middles = middlesBelow(linksOf, heads)
   const straight: Sep[] = []
   const usedDown = new Set<string>()
   const usedUp = new Set<string>()

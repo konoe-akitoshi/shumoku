@@ -132,3 +132,27 @@ links:
     expect([...headsOf({ above })]).toEqual(['far'])
   })
 })
+
+describe('a line down a column into a box that heads no fan', () => {
+  it('still runs straight into it', () => {
+    const yaml = `
+nodes:
+  - { id: r, type: router }
+  - { id: a, type: l2-switch }
+  - { id: b, type: l2-switch }
+  - { id: c, type: server }
+  - { id: d, type: server }
+links:
+  - endpoints: [{ node: r, port: p1 }, { node: a, port: up }]
+  - endpoints: [{ node: a, port: p1 }, { node: b, port: up }]
+  - endpoints: [{ node: b, port: p1 }, { node: c, port: e }]
+  - endpoints: [{ node: r, port: p2 }, { node: d, port: e }]
+  - endpoints: [{ node: a, port: p2 }, { node: d, port: e2 }]
+`
+    const scene = drawNetwork(readNetworkModel(yaml), { metrics: () => testMetrics })
+    const w = scene.wires.find((x) => x.link.from.node === 'r' && x.link.to.node === 'd')
+    const xs = w?.points.map((p) => p.x) ?? []
+    expect(xs.length).toBeGreaterThan(1)
+    for (const x of xs) expect(x).toBeCloseTo(xs[0] ?? Number.NaN, 6)
+  })
+})
