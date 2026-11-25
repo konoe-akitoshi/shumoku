@@ -35,10 +35,12 @@
  *      for rejection — an IP swap is legitimate and handled by replacement).
  *   4. All vetoed -> continue; nothing left -> mint.
  *
- * Merge guard: auto-merge ONLY when all candidates share a merge-strong key
- * (node: STRONG class; port: ifName/manual:* — never mac or ifIndex alone),
- * OR all agree on >=2 independent keys (a node's address, sysName and MAC are each one; a port's
- * keys count by class). Otherwise adopt the best
+ * Merge guard: auto-merge ONLY when the observation shows every candidate is its device: it
+ * shares a merge-strong key with it (node: STRONG class; port: ifName/manual:* — never mac or
+ * ifIndex alone), OR agrees with it on >=2 independent keys (a node's address, sysName and MAC
+ * are each one; a port's keys count by class), OR holds the address the device answered on when
+ * it was read from itself (`NodeObservation.answeredAt`: the device's own claim, so one key is
+ * enough). Otherwise adopt the best
  * candidate (highest class, tie -> oldest) WITHOUT merging and console.warn
  * a structured `[Registry] ambiguous match` line for deferred review.
  *
@@ -167,6 +169,12 @@ const SINGLETON_PORT_KEYS = new Set<string>()
 interface IdentityKey {
   key: string
   value: string
+  /**
+   * The address the device answered on when the source read it from the device itself
+   * (`NodeObservation.answeredAt`). Not stored apart: it is an address like any other, but in
+   * this observation it is the device's own claim, which is evidence enough to merge.
+   */
+  answered?: true
 }
 
 /**
@@ -182,7 +190,11 @@ interface IdentityKey {
  * the ARP cache. Leaving it out let both sides store the same address and still mint separate
  * entities for one device.
  */
-function gatherNodeKeys(keys: DeviceKeys, sourceId: string, nodeId: string): IdentityKey[] {
+function gatherNodeKeys(
+  keys: DeviceKeys & { answeredAt?: string | undefined },
+  sourceId: string,
+  nodeId: string,
+): IdentityKey[] {
   const out: IdentityKey[] = []
   if (keys.chassisId) {
     out.push({ key: 'chassisId', value: normalizeKeyValue('chassisId', keys.chassisId) })
@@ -193,8 +205,13 @@ function gatherNodeKeys(keys: DeviceKeys, sourceId: string, nodeId: string): Ide
   const addresses = new Set(
     [keys.address, ...(keys.addresses ?? [])].flatMap((a) => (a ? [addressKey(a)] : [])),
   )
+  const answered = keys.answeredAt ? addressKey(keys.answeredAt) : undefined
   for (const address of addresses) {
-    out.push({ key: 'mgmtIp', value: normalizeKeyValue('mgmtIp', address) })
+    out.push({
+      key: 'mgmtIp',
+      value: normalizeKeyValue('mgmtIp', address),
+      ...(address === answered && { answered: true as const }),
+    })
   }
   if (keys.mac) {
     out.push({ key: 'mac', value: normalizeKeyValue('mac', keys.mac) })
@@ -399,6 +416,35 @@ function sharesStrongKey(
   return false
 }
 
+/**
+ * Whether the candidate holds the address the observed device answered on. The device was read
+ * there and named itself (its chassis, its name): that is its own claim to the address, not two
+ * records that happen to agree, so one shared key is enough. A record that has only ever known
+ * the device by its address (an inventory, a monitor) can share nothing else with it.
+ */
+function holdsAnsweredAddress(obsKeys: IdentityKey[], entityKeys: Map<string, string[]>): boolean {
+  return obsKeys.some(
+    (k) => k.answered === true && (entityKeys.get(k.key)?.includes(k.value) ?? false),
+  )
+}
+
+/**
+ * Whether the observation shows a candidate is the device it saw: a strong key in common, two
+ * independent keys, or the address the device answered on. A candidate that passes is the same
+ * device as the observation, so candidates that all pass are one device.
+ */
+function isSameDevice(
+  obsKeys: IdentityKey[],
+  candidate: CandidateInfo,
+  kind: 'node' | 'port',
+): boolean {
+  return (
+    sharesStrongKey(obsKeys, candidate.entityKeys, kind) ||
+    countSharedKeyClasses(obsKeys, candidate.entityKeys, kind) >= 2 ||
+    (kind === 'node' && holdsAnsweredAddress(obsKeys, candidate.entityKeys))
+  )
+}
+
 interface CandidateInfo {
   entityId: EntityId
   firstSeenAt: number
@@ -497,9 +543,10 @@ function stagedLookupNode(
     )
     if (candidates.length > 0) {
       // An entity the strong key does not reach but that agrees with the observation on two
-      // independent keys (its address and its sysName) is the same device, minted apart (one source
-      // had not yet come, or had left). Folding it in here lets the merge guard join them; stopping
-      // at the strong stage left it a second node for the one device forever.
+      // independent keys (its address and its sysName), or that holds the address the device
+      // answered on, is the same device, minted apart (one source had not yet come, or had left;
+      // or knew the device only by its address). Folding it in here lets the merge guard join
+      // them; stopping at the strong stage left it a second node for the one device forever.
       const strongIds = new Set(candidates.map((c) => c.entityId))
       const alike =
         mutableObs.length === 0
@@ -516,7 +563,8 @@ function stagedLookupNode(
             ).filter(
               (c) =>
                 !strongIds.has(c.entityId) &&
-                countSharedKeyClasses(obsKeys, c.entityKeys, 'node') >= 2,
+                (countSharedKeyClasses(obsKeys, c.entityKeys, 'node') >= 2 ||
+                  holdsAnsweredAddress(obsKeys, c.entityKeys)),
             )
       return [...candidates, ...alike]
     }
@@ -697,6 +745,19 @@ function insertIdentityKeys(
   }
 }
 
+/**
+ * How a merged device is read over SNMP (its `device_access` row: the credential and how the last
+ * read went) goes with it to the entity it merged into, unless that one has its own. The row is
+ * keyed by entity id and written by the id the drawing shows, which is the survivor's; left on
+ * the absorbed id, the device would lose its credential and its read state the moment it merged.
+ */
+function carryDeviceAccess(from: EntityId, to: EntityId, db: Database): void {
+  db.query(
+    `UPDATE device_access SET entity_id = ?
+      WHERE entity_id = ? AND NOT EXISTS (SELECT 1 FROM device_access WHERE entity_id = ?)`,
+  ).run(to, from, to)
+}
+
 // ---------------------------------------------------------------------------
 // Core adopt-or-mint
 // ---------------------------------------------------------------------------
@@ -746,14 +807,9 @@ function adoptOrMintEntity(
     return entityId
   }
 
-  // Multiple candidates: apply merge guard
+  // Multiple candidates: merge them only when the observation shows each is its device
   const guardKind = entityKind === 'port' ? 'port' : 'node'
-  const allShareStrongKey = candidates.every((c) => sharesStrongKey(keys, c.entityKeys, guardKind))
-  const allAgreeOn2Classes = candidates.every(
-    (c) => countSharedKeyClasses(keys, c.entityKeys, guardKind) >= 2,
-  )
-
-  if (allShareStrongKey || allAgreeOn2Classes) {
+  if (candidates.every((c) => isSameDevice(keys, c, guardKind))) {
     const sorted = [...candidates].sort(
       (a, b) => a.firstSeenAt - b.firstSeenAt || a.entityId.localeCompare(b.entityId),
     )
@@ -765,6 +821,7 @@ function adoptOrMintEntity(
         other.entityId,
         survivorId,
       )
+      carryDeviceAccess(other.entityId, survivorId, db)
     }
     db.query(
       "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
@@ -898,6 +955,7 @@ export function adoptOrMintForGraph(
         ...node,
         addresses: addresses.get(node.id),
         vendorIds: observation?.nodes?.[node.id]?.vendorIds,
+        answeredAt: observation?.nodes?.[node.id]?.answeredAt,
       },
       sourceId,
       node.id,

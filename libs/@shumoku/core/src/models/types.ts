@@ -535,6 +535,14 @@ export interface NodeObservation {
   vendorIds?: Record<string, string>
 
   /**
+   * The address the device answered on when this source read it from the device itself (over
+   * SNMP, say): not an address it reported, but the one it was reached at. What the device said
+   * there (its chassis, its name) is then its own claim to that address, so whatever knows the
+   * device by that address and whatever knows it by its chassis are one device.
+   */
+  answeredAt?: string
+
+  /**
    * Authored overlay for this node: access (how to read it) and policy
    * (discovery scheduling) attachments. Access/policy merge with the
    * parent subgraph and topology default via `computeEffectivePolicy()`.

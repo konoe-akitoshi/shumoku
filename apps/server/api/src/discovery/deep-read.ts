@@ -507,6 +507,8 @@ function visitedToNode(
       ...(ports.length > 0 ? { ports } : {}),
     },
     observation: {
+      // the device was read at its address: what it says of itself there is its own claim
+      ...(device.attributes.address && { answeredAt: device.attributes.address }),
       metadata: {
         syncState: 'synced',
         readVia: 'snmp',
