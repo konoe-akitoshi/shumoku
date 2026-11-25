@@ -10,7 +10,7 @@ import { boundaryOf, drawNetwork } from '../draw.js'
 import { axesOf } from '../geometry.js'
 import { planningOf } from '../testing/stages.js'
 import { testMetrics } from '../testing/support.js'
-import { BALANCE_WEIGHT, balanceOf } from './balance.js'
+import { BALANCE_WEIGHT, balanceOf, headsOf } from './balance.js'
 
 const fan = `
 nodes:
@@ -83,5 +83,103 @@ describe('a parent over its children', () => {
     const draw = () =>
       JSON.stringify(drawNetwork(readNetworkModel(fan), { metrics: () => testMetrics }).nodes)
     expect(draw()).toBe(draw())
+  })
+})
+
+describe('a switch over its access points', () => {
+  // the uplink comes from far to the left; the switch still stands over its four access points
+  const yaml = `
+nodes:
+  - { id: core, type: router }
+  - { id: far, type: l2-switch }
+  - { id: x1, type: server }
+  - { id: x2, type: server }
+  - { id: x3, type: server }
+  - { id: sw, type: l2-switch }
+  - { id: ap1, type: access-point }
+  - { id: ap2, type: access-point }
+  - { id: ap3, type: access-point }
+  - { id: ap4, type: access-point }
+links:
+  - endpoints: [{ node: core, port: p1 }, { node: far, port: up }]
+  - endpoints: [{ node: far, port: p1 }, { node: x1, port: e }]
+  - endpoints: [{ node: far, port: p2 }, { node: x2, port: e }]
+  - endpoints: [{ node: far, port: p3 }, { node: x3, port: e }]
+  - endpoints: [{ node: core, port: p2 }, { node: sw, port: up }]
+  - endpoints: [{ node: sw, port: e1 }, { node: ap1, port: up }]
+  - endpoints: [{ node: sw, port: e2 }, { node: ap2, port: up }]
+  - endpoints: [{ node: sw, port: e3 }, { node: ap3, port: up }]
+  - endpoints: [{ node: sw, port: e4 }, { node: ap4, port: up }]
+`
+  it('stands centred over them, not over the first', () => {
+    const scene = drawNetwork(readNetworkModel(yaml), { metrics: () => testMetrics })
+    const mid = (id: string) => {
+      const b = scene.nodes.find((n) => n.node.id === id)?.box
+      return (b?.x ?? Number.NaN) + (b?.width ?? 0) / 2
+    }
+    const kids = ['ap1', 'ap2', 'ap3', 'ap4'].map(mid)
+    const centre = kids.reduce((a, b) => a + b, 0) / kids.length
+    expect(Math.abs(mid('sw') - centre)).toBeLessThan(10)
+  })
+
+  it('names only boxes over two or more ends of the flow as fan heads', () => {
+    const above = [
+      { upper: 'core', lower: 'far' },
+      { upper: 'far', lower: 'x1' },
+      { upper: 'far', lower: 'x2' },
+      { upper: 'core', lower: 'sw' },
+    ]
+    expect([...headsOf({ above })]).toEqual(['far'])
+  })
+})
+
+describe('a line down a column into a box that heads no fan', () => {
+  it('still runs straight into it', () => {
+    const yaml = `
+nodes:
+  - { id: r, type: router }
+  - { id: a, type: l2-switch }
+  - { id: b, type: l2-switch }
+  - { id: c, type: server }
+  - { id: d, type: server }
+links:
+  - endpoints: [{ node: r, port: p1 }, { node: a, port: up }]
+  - endpoints: [{ node: a, port: p1 }, { node: b, port: up }]
+  - endpoints: [{ node: b, port: p1 }, { node: c, port: e }]
+  - endpoints: [{ node: r, port: p2 }, { node: d, port: e }]
+  - endpoints: [{ node: a, port: p2 }, { node: d, port: e2 }]
+`
+    const scene = drawNetwork(readNetworkModel(yaml), { metrics: () => testMetrics })
+    const w = scene.wires.find((x) => x.link.from.node === 'r' && x.link.to.node === 'd')
+    const xs = w?.points.map((p) => p.x) ?? []
+    expect(xs.length).toBeGreaterThan(1)
+    for (const x of xs) expect(x).toBeCloseTo(xs[0] ?? Number.NaN, 6)
+  })
+})
+
+describe('a box hanging from one with an unrelated neighbour', () => {
+  it('stands under what it hangs from, whatever the order of the frame put it after', () => {
+    const yaml = `
+nodes:
+  - { id: sw, type: router }
+  - { id: host, type: l2-switch }
+  - { id: other, type: server }
+  - { id: guest, type: server }
+links:
+  - endpoints: [{ node: sw, port: p1 }, { node: host, port: e1 }]
+  - endpoints: [{ node: sw, port: p2 }, { node: other, port: e1 }]
+  - endpoints: [{ node: host, port: e2 }, { node: guest, port: e1 }]
+`
+    const model = readNetworkModel(yaml)
+    // the frame's order names the hanging box after the neighbour it has nothing to do with
+    const order = { '': ['sw', 'host', 'other', 'guest'] }
+    const scene = drawNetwork(
+      { ...model, drawing: { ...model.drawing, order } },
+      { metrics: () => testMetrics },
+    )
+    const w = scene.wires.find((x) => x.link.from.node === 'host' && x.link.to.node === 'guest')
+    const xs = w?.points.map((p) => p.x) ?? []
+    expect(xs.length).toBeGreaterThan(1)
+    for (const x of xs) expect(x).toBeCloseTo(xs[0] ?? Number.NaN, 6)
   })
 })

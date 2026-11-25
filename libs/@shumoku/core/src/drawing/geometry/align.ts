@@ -6,6 +6,7 @@ import { columnKey, sideKey, varKey } from '../keys.js'
 import type { Ledger } from '../ledger.js'
 import { must } from '../must.js'
 import type { Var } from '../tracks.js'
+import { headsOf } from './balance.js'
 import type { Plan } from './plan.js'
 import { type Axis, type Sep, same } from './system.js'
 import type { Step } from './widths.js'
@@ -52,6 +53,7 @@ const sideOf = (plan: Pick<Plan, 'tracks'>, v: Var) =>
 function linksByLower(
   plan: Pick<Plan, 'tracks' | 'corridors'>,
   steps: readonly Step[],
+  heads: ReadonlySet<string>,
 ): Map<string, Link[]> {
   const linksOf = new Map<string, Link[]>()
   for (const st of steps) {
@@ -59,6 +61,9 @@ function linksByLower(
     if (!ea || !eb || Math.abs(ea.rank - eb.rank) !== 1) continue
     const [upper, lower, up, low] = ea.rank < eb.rank ? [st.a, st.b, ea, eb] : [st.b, st.a, eb, ea]
     if (sideOf(plan, upper) !== undefined && sideOf(plan, upper) !== 'bottom') continue
+    // a line that comes down a column into a fan head has turned already; it is not held
+    // straight into the head, which stands over its fan instead
+    if (upper.kind === 'lane' && lower.kind === 'port' && heads.has(low.key)) continue
     if (sideOf(plan, lower) !== undefined && sideOf(plan, lower) !== 'top') continue
     linksOf.set(low.key, [...(linksOf.get(low.key) ?? []), { upper, lower, up, low }])
   }
@@ -94,13 +99,46 @@ function lowerElements(
 }
 
 /** What alignment reads of the plan. */
-export type AlignPlan = Pick<Plan, 'tracks' | 'corridors' | 'layers'>
+export type AlignPlan = Pick<Plan, 'tracks' | 'corridors' | 'layers' | 'problem'>
+
+/**
+ * The elements below each upper element that it may give its one line down to: the middle of
+ * those it hands over to in the gap, left to right, or the two middles of an even number. A fan
+ * head (`heads`, a box over two or more ends of the flow) with an even number gives none: it
+ * stands between them (`headsOf`, the balance centres it) and its lines bend alike.
+ */
+function middlesBelow(
+  linksOf: ReadonlyMap<string, Link[]>,
+  heads: ReadonlySet<string>,
+): Map<string, ReadonlySet<string>> {
+  const below = new Map<string, Elem[]>()
+  for (const links of linksOf.values())
+    for (const l of links)
+      if (!(below.get(l.up.key) ?? []).some((e) => e.key === l.low.key))
+        below.set(l.up.key, [...(below.get(l.up.key) ?? []), l.low])
+  return new Map(
+    [...below].map(([up, list]) => {
+      const sorted = [...list].sort((p, q) => p.pos - q.pos).map((e) => e.key)
+      const n = sorted.length
+      const even = n % 2 === 0
+      const picks = even
+        ? heads.has(up)
+          ? []
+          : [sorted[n / 2 - 1], sorted[n / 2]]
+        : [sorted[(n - 1) / 2]]
+      return [up, new Set(picks.filter((k): k is string => k !== undefined))]
+    }),
+  )
+}
 
 /**
  * Alignment, after Brandes and Koepf: down the gaps, each box (or run) takes the line at the
  * median of its top edge to stand straight with, if that keeps the lines from crossing and
  * forms no ring (the ledger says whether the equality fits); a box gives one line down and takes
- * one up. Returns the equalities chosen, and holds them in the ledger.
+ * one up. The line a box gives down is the one to the middle of what it hands over to
+ * (`middlesBelow`), not the first that asks: taken left to right, the first child took its parent,
+ * which stood over its leftmost child with every other line of the fan run out to the right.
+ * Returns the equalities chosen, and holds them in the ledger.
  */
 export function alignDown(
   plan: AlignPlan,
@@ -108,8 +146,10 @@ export function alignDown(
   steps: readonly Step[],
   held: Ledger,
 ): Sep[] {
-  const linksOf = linksByLower(plan, steps)
+  const heads = headsOf(plan.problem)
+  const linksOf = linksByLower(plan, steps, heads)
   const lowerElems = lowerElements(plan, linksOf)
+  const middles = middlesBelow(linksOf, heads)
   const straight: Sep[] = []
   const usedDown = new Set<string>()
   const usedUp = new Set<string>()
@@ -126,7 +166,11 @@ export function alignDown(
         const v = vars[m]
         if (!v || done) continue
         const link = (linksOf.get(elem.key) ?? []).find(
-          (l) => varKey(l.lower) === varKey(v) && l.up.pos > last && !usedDown.has(l.up.key),
+          (l) =>
+            varKey(l.lower) === varKey(v) &&
+            l.up.pos > last &&
+            !usedDown.has(l.up.key) &&
+            (middles.get(l.up.key)?.has(elem.key) ?? false),
         )
         if (!link) continue
         const eq = same(xAxis.at(link.upper), xAxis.at(link.lower))

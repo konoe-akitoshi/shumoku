@@ -7,7 +7,7 @@ import { jogLeastOf, pitchOf } from '../kin.js'
 import { type Ledger, ledgerOf } from '../ledger.js'
 import type { Var } from '../tracks.js'
 import { type AlignPlan, alignDown } from './align.js'
-import { balanceOf, portMiddlesOf } from './balance.js'
+import { balanceOf, headsOf, pairKey, portMiddlesOf, UPWARD_WEIGHT } from './balance.js'
 import type { Plan } from './plan.js'
 import {
   type Axis,
@@ -65,9 +65,23 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
   })
   // what remains is the length of the runs along the rows
   const pull: AxisInput['pair'] = [...xSys.pair]
-  for (const s of unaligned) pull.push({ i: xAxis.at(s.a).v, j: xAxis.at(s.b).v, w: 1, d: 0 })
+  // but a run that comes to the top of a box that hands over to several is pulled only weakly,
+  // and so is that box to the one the line comes from: it stands over those below it first
+  const heads = headsOf(plan.problem)
+  const intoHead = (v: Var): boolean => {
+    const ent = v.kind === 'port' ? plan.tracks.entities.get(v.id) : undefined
+    const item = ent?.side === 'top' ? plan.corridors.boxes.get(ent.box)?.item : undefined
+    return item !== undefined && heads.has(item)
+  }
+  const bentUp = new Set<string>()
+  for (const s of unaligned) {
+    const weak = intoHead(s.a) || intoHead(s.b)
+    const line = weak ? plan.byLine.get(s.line) : undefined
+    if (line) bentUp.add(pairKey(line.a.item, line.b.item)).add(pairKey(line.b.item, line.a.item))
+    pull.push({ i: xAxis.at(s.a).v, j: xAxis.at(s.b).v, w: weak ? UPWARD_WEIGHT : 1, d: 0 })
+  }
   // and, weakly, the middle of every box over the middles of the boxes below it
-  pull.push(...balanceOf(plan, xAxis).pair)
+  pull.push(...balanceOf(plan, xAxis, bentUp).pair)
   // and more weakly still, each port about the middle of its edge
   pull.push(...portMiddlesOf(plan, xAxis))
   const solveX = (more: { sep?: Sep[]; equal?: Sep[] } = {}) =>
