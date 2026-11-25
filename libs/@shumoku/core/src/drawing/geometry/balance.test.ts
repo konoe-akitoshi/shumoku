@@ -156,3 +156,30 @@ links:
     for (const x of xs) expect(x).toBeCloseTo(xs[0] ?? Number.NaN, 6)
   })
 })
+
+describe('a box hanging from one with an unrelated neighbour', () => {
+  it('stands under what it hangs from, whatever the order of the frame put it after', () => {
+    const yaml = `
+nodes:
+  - { id: sw, type: router }
+  - { id: host, type: l2-switch }
+  - { id: other, type: server }
+  - { id: guest, type: server }
+links:
+  - endpoints: [{ node: sw, port: p1 }, { node: host, port: e1 }]
+  - endpoints: [{ node: sw, port: p2 }, { node: other, port: e1 }]
+  - endpoints: [{ node: host, port: e2 }, { node: guest, port: e1 }]
+`
+    const model = readNetworkModel(yaml)
+    // the frame's order names the hanging box after the neighbour it has nothing to do with
+    const order = { '': ['sw', 'host', 'other', 'guest'] }
+    const scene = drawNetwork(
+      { ...model, drawing: { ...model.drawing, order } },
+      { metrics: () => testMetrics },
+    )
+    const w = scene.wires.find((x) => x.link.from.node === 'host' && x.link.to.node === 'guest')
+    const xs = w?.points.map((p) => p.x) ?? []
+    expect(xs.length).toBeGreaterThan(1)
+    for (const x of xs) expect(x).toBeCloseTo(xs[0] ?? Number.NaN, 6)
+  })
+})

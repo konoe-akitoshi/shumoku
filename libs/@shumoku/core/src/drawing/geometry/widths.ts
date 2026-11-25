@@ -112,7 +112,11 @@ function columnWidths(
 
 /**
  * Siblings with nothing to do with each other stand apart; those that share ranks are held
- * apart by the columns between them.
+ * apart by the columns between them. Two boxes in ranks apart cannot meet whatever their x, so
+ * only a frame, which reaches over its ranks, is held beside a sibling in other ranks. Holding
+ * boxes too would put them in the order the frame's children came in, which nothing chose: the
+ * order is searched for fewer crossings rank by rank, and one rank's box is not counted against
+ * another's, so a box hanging from one stood beside its neighbour instead of under it.
  */
 function siblingsApart(
   plan: Pick<Plan, 'metrics' | 'ranks' | 'problem' | 'kidsOf' | 'isGroup'>,
@@ -126,6 +130,7 @@ function siblingsApart(
       for (const b of kids.slice(i + 1)) {
         const [sa, sb] = [ranks.span.get(a), ranks.span.get(b)]
         if (!sa || !sb || (sa[1] >= sb[0] && sb[1] >= sa[0]) || ranks.ordered(a, b)) continue
+        if (!plan.isGroup(a) && !plan.isGroup(b)) continue
         sep.push(
           after(
             xAxis.highRef(a),
