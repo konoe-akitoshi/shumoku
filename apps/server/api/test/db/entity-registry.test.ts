@@ -1244,6 +1244,81 @@ describe('entity registry', () => {
         .all(topologyId)
       expect(access).toEqual([{ entity_id: survivor ?? '', last_status: 'ok' }])
     })
+
+    test('the credential that reads the device wins over an empty row of the survivor', () => {
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'empty-row')
+      registerNode(topologyId, controller, CONTROLLER, 1_000)
+      registerNode(topologyId, inventory, INVENTORY, 2_000)
+      const entityOf = (sourceId: string, key: string) =>
+        db
+          .query<{ entity_id: string }, [string, string, string]>(
+            `SELECT entity_id FROM entity_identity_key
+              WHERE topology_id = ? AND kind = 'node' AND key = ? AND source_id = ?`,
+          )
+          .get(topologyId, key, sourceId)?.entity_id ?? ''
+      // the survivor was tried on another of its addresses and answered none
+      db.query(
+        `INSERT INTO device_access (entity_id, topology_id, enabled, tried_at, updated_at)
+         VALUES (?, ?, 1, 5, 0)`,
+      ).run(entityOf(controller, 'chassisId'), topologyId)
+      db.query(
+        `INSERT INTO credential
+           (id, name, method, params_json, secret_json, secret_changed_at, created_at, updated_at)
+         VALUES ('cred-empty-row', 'c', 'snmp', '{}', '{}', 0, 0, 0)`,
+      ).run()
+      db.query(
+        `INSERT INTO device_access (entity_id, topology_id, credential_id, enabled, last_status, updated_at)
+         VALUES (?, ?, 'cred-empty-row', 1, 'ok', 0)`,
+      ).run(entityOf(inventory, 'mgmtIp'), topologyId)
+      registerNode(topologyId, reader, READ, 3_000, true)
+      const [survivor] = liveNodes(topologyId)
+      const access = db
+        .query<{ entity_id: string; credential_id: string | null }, [string]>(
+          'SELECT entity_id, credential_id FROM device_access WHERE topology_id = ?',
+        )
+        .all(topologyId)
+      expect(access).toEqual([{ entity_id: survivor ?? '', credential_id: 'cred-empty-row' }])
+    })
+  })
+
+  describe('an observation that each candidate is shown to be', () => {
+    test('merges a candidate found by its chassis with one that agrees on address and sysName', () => {
+      // each is shown to be the observed device on its own: the chassis, or two independent keys
+      const topologyId = makeTopology(db)
+      const controller = insertDataSource('cvcue-mixed')
+      const inventory = insertDataSource('config-mixed')
+      const neighbour = insertDataSource('lldp-mixed')
+      for (const s of [controller, inventory, neighbour]) attachSource(topologyId, s, 'topology')
+      const node = (identity: Record<string, string>) => ({
+        name: 'g',
+        nodes: [{ id: 'n', label: 'n', identity, ports: [] }],
+        links: [],
+      })
+      ingestAndRegister(db, topologyId, controller, node({ chassisId: 'aa:aa:aa:00:00:01' }), 1_000)
+      ingestAndRegister(
+        db,
+        topologyId,
+        inventory,
+        node({ mgmtIp: '10.9.9.1', sysName: 'mixed-sw' }),
+        2_000,
+      )
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+      ingestAndRegister(
+        db,
+        topologyId,
+        neighbour,
+        node({ chassisId: 'aa:aa:aa:00:00:01', mgmtIp: '10.9.9.1', sysName: 'mixed-sw' }),
+        3_000,
+      )
+      const live = db
+        .query<{ n: number }, [string]>(
+          `SELECT COUNT(*) AS n FROM entity_registry WHERE topology_id = ? AND kind = 'node'
+           AND id NOT IN (SELECT old_id FROM entity_alias)`,
+        )
+        .get(topologyId)?.n
+      expect(live).toBe(1)
+    })
   })
 
   // -------------------------------------------------------------------------

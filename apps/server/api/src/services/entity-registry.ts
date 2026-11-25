@@ -747,11 +747,19 @@ function insertIdentityKeys(
 
 /**
  * How a merged device is read over SNMP (its `device_access` row: the credential and how the last
- * read went) goes with it to the entity it merged into, unless that one has its own. The row is
- * keyed by entity id and written by the id the drawing shows, which is the survivor's; left on
- * the absorbed id, the device would lose its credential and its read state the moment it merged.
+ * read went) goes with it to the entity it merged into. The row is keyed by entity id and written
+ * by the id the drawing shows, which is the survivor's; left on the absorbed id, the device would
+ * lose its credential and its read state the moment it merged. The survivor's own row is kept,
+ * unless it holds no credential while the absorbed one does (a trial that found nothing on another
+ * of the device's addresses) and no one has excluded the device: then the credential that reads
+ * the device wins.
  */
 function carryDeviceAccess(from: EntityId, to: EntityId, db: Database): void {
+  db.query(
+    `DELETE FROM device_access
+      WHERE entity_id = ? AND credential_id IS NULL AND enabled = 1
+        AND EXISTS (SELECT 1 FROM device_access WHERE entity_id = ? AND credential_id IS NOT NULL)`,
+  ).run(to, from)
   db.query(
     `UPDATE device_access SET entity_id = ?
       WHERE entity_id = ? AND NOT EXISTS (SELECT 1 FROM device_access WHERE entity_id = ?)`,
