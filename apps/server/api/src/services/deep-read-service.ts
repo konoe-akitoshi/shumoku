@@ -266,12 +266,13 @@ export function clearReadings(topologyId: string, observations: ObservationsServ
 
 /**
  * Whether a node of the deep-read snapshot is a device it read that may still be read. The node
- * is known by the entity the registry gave it; a device whose access was turned off has no row
- * here. A node the registry has not placed yet stays.
+ * is known by the entity the registry gave it, followed through merges to the device the drawing
+ * shows; that device's own access row decides, as it decides what a read reads
+ * (`resolveReadTargets`). A row left on an entity merged away does not count. A node the registry
+ * has not placed yet stays.
  */
 function readableOf(topologyId: string): (nodeId: string) => boolean {
   const db = getDatabase()
-  const resolve = (id: string) => resolveEntityAlias(asEntityId(id), db)
   const readable = new Set(
     (
       db
@@ -282,8 +283,9 @@ function readableOf(topologyId: string): (nodeId: string) => boolean {
             WHERE da.topology_id = ? AND da.enabled = 1`,
         )
         .all(topologyId) as Array<{ entity_id: string }>
-    ).map((r) => resolve(r.entity_id)),
+    ).map((r) => r.entity_id),
   )
+  const resolve = (id: string) => resolveEntityAlias(asEntityId(id), db)
   const entityOf = new Map(
     (
       db

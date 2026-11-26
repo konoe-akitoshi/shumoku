@@ -131,6 +131,26 @@ describe('deep-read readings follow device access', () => {
     expect(t.links()).toEqual([])
   })
 
+  test('a row left on an entity merged away does not keep the device readable', async () => {
+    const t = await topology('merged')
+    const db = getDatabase()
+    // an inventory's entity for A, merged into A's, still holds an enabled row with the credential
+    db.query(
+      `INSERT INTO entity_registry (id, topology_id, kind, parent_id, status, first_seen_at, last_seen_at)
+       VALUES ('absorbed-merged', ?, 'node', NULL, 'active', 0, 0)`,
+    ).run(t.id)
+    db.query("INSERT INTO entity_alias (old_id, new_id) VALUES ('absorbed-merged', ?)").run(
+      t.entityOf(A),
+    )
+    db.query(
+      `INSERT INTO device_access (entity_id, topology_id, credential_id, enabled, updated_at)
+       VALUES ('absorbed-merged', ?, ?, 1, 0)`,
+    ).run(t.id, t.credential)
+    db.query('UPDATE device_access SET enabled = 0 WHERE entity_id = ?').run(t.entityOf(A))
+    expect(await withdrawUnreadable(t.id, observations)).toBe(true)
+    expect(t.nodes()).toEqual([B])
+  })
+
   test('a device that only failed to answer keeps its reading', async () => {
     const t = await topology('lost')
     getDatabase()
