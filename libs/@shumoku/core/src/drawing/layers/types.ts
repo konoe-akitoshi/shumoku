@@ -85,6 +85,8 @@ export interface PortGroup {
   readonly side: 'top' | 'bottom'
   readonly ids: readonly PortKey[]
   readonly partners: readonly (readonly string[])[]
+  /** Where each port's first line stands in the input: the same at both of its ends. */
+  readonly lineOrder: readonly number[]
 }
 /** What an order costs, gap by gap and rank by rank. */
 export interface Costs {
@@ -115,6 +117,8 @@ export interface PortInfo {
   readonly box: string
   readonly side: 'top' | 'bottom'
   readonly partners: readonly string[]
+  /** Where the first line through this port stands in the input. */
+  readonly lineOrder: number
 }
 /** The places a place has above, below and beside it. */
 export interface Neighbours {

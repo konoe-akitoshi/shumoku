@@ -33,6 +33,7 @@ export function linesOf(basis: Basis): Wires {
   }
   const segs = new Map<string, Building<Segment>>()
   const portInfo = new Map<PortKey, Building<PortInfo>>()
+  const lineOrder = new Map(problem.lines.map((l, i) => [l.id, i] as const))
   const portOf = (
     end: Line['a'],
     which: 'a' | 'b',
@@ -40,7 +41,13 @@ export function linesOf(basis: Basis): Wires {
     side: 'top' | 'bottom',
   ): PortKey => {
     const id = portKey(portId(end.node ?? end.item, end.port, line.id, which), side)
-    if (!portInfo.has(id)) portInfo.set(id, { box: boxKey(end), side, partners: [] })
+    if (!portInfo.has(id))
+      portInfo.set(id, {
+        box: boxKey(end),
+        side,
+        partners: [],
+        lineOrder: lineOrder.get(line.id) ?? 0,
+      })
     return id
   }
   const levels: Level[] = []
