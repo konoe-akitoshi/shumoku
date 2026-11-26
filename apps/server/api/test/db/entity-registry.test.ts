@@ -1100,6 +1100,227 @@ describe('entity registry', () => {
     })
   })
 
+  describe('a device read at the address an inventory knows it by', () => {
+    // An inventory and a monitor know a switch by its address only; a wireless controller knows
+    // it by the chassis MAC its access points uplink to. Nothing joins the two until the switch is
+    // read at that address and names its chassis itself.
+    const INVENTORY = { mgmtIp: '10.20.2.7' }
+    const CONTROLLER = { chassisId: '2c:dd:e9:f6:bc:86', sysName: '2nd-l2-07' }
+    const READ = { chassisId: '2c:dd:e9:f6:bc:86', mgmtIp: '10.20.2.7', sysName: '2nd-l2-07' }
+
+    /** Register one node; `answered` marks the device as read at its address. */
+    function registerNode(
+      topologyId: string,
+      sourceId: string,
+      identity: Record<string, string>,
+      now: number,
+      answered = false,
+    ): void {
+      const attach = db
+        .query<{ id: string }, [string, string]>(
+          `SELECT id FROM topology_data_sources
+           WHERE topology_id = ? AND data_source_id = ? AND purpose = 'topology'`,
+        )
+        .get(topologyId, sourceId)
+      const source = graphToSource({
+        name: sourceId,
+        nodes: [{ id: 'n', label: 'n', identity, ports: [] }],
+        links: [],
+      })
+      const answeredAt = identity['mgmtIp']
+      const withAnswer =
+        answered && answeredAt
+          ? {
+              ...source,
+              observation: {
+                ...source.observation,
+                nodes: {
+                  ...source.observation?.nodes,
+                  n: { ...source.observation?.nodes?.['n'], answeredAt },
+                },
+              },
+            }
+          : source
+      ingestNetwork(topologyId, sourceId, withAnswer, { attachmentId: attach?.id ?? null }, db)
+      adoptOrMintForGraph(topologyId, sourceId, db, now)
+    }
+
+    /** The node entities no alias points away from. */
+    function liveNodes(topologyId: string): string[] {
+      return db
+        .query<{ id: string }, [string]>(
+          `SELECT id FROM entity_registry WHERE topology_id = ? AND kind = 'node'
+           AND id NOT IN (SELECT old_id FROM entity_alias)`,
+        )
+        .all(topologyId)
+        .map((r) => r.id)
+    }
+
+    function sources(topologyId: string, tag: string): [string, string, string] {
+      const ids: [string, string, string] = [
+        insertDataSource(`netbox-${tag}`),
+        insertDataSource(`cvcue-${tag}`),
+        insertDataSource(`deep-read-${tag}`),
+      ]
+      for (const s of ids) attachSource(topologyId, s, 'topology')
+      return ids
+    }
+
+    test('merges the inventory entity and the chassis entity', () => {
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'answered')
+      registerNode(topologyId, inventory, INVENTORY, 1_000)
+      registerNode(topologyId, controller, CONTROLLER, 2_000)
+      expect(liveNodes(topologyId)).toHaveLength(2)
+      registerNode(topologyId, reader, READ, 3_000, true)
+      expect(liveNodes(topologyId)).toHaveLength(1)
+    })
+
+    test('comes to one entity whichever source comes first', () => {
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'order')
+      registerNode(topologyId, controller, CONTROLLER, 1_000)
+      registerNode(topologyId, reader, READ, 2_000, true)
+      registerNode(topologyId, inventory, INVENTORY, 3_000)
+      expect(liveNodes(topologyId)).toHaveLength(1)
+    })
+
+    test('an address the source only reported does not merge them', () => {
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'reported')
+      registerNode(topologyId, inventory, INVENTORY, 1_000)
+      registerNode(topologyId, controller, CONTROLLER, 2_000)
+      registerNode(topologyId, reader, READ, 3_000)
+      expect(liveNodes(topologyId)).toHaveLength(2)
+    })
+
+    test('a device that names itself otherwise than the record of its address is not merged', () => {
+      // the address was given to another device: the record names the old one
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'reused')
+      registerNode(topologyId, inventory, { mgmtIp: '10.20.2.7', sysName: 'old-sw' }, 1_000)
+      registerNode(topologyId, controller, CONTROLLER, 2_000)
+      registerNode(topologyId, reader, READ, 3_000, true)
+      expect(liveNodes(topologyId)).toHaveLength(2)
+    })
+
+    test('a device whose chassis differs from the record of its address is not merged', () => {
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'chassis')
+      registerNode(
+        topologyId,
+        inventory,
+        { mgmtIp: '10.20.2.7', chassisId: '00:11:22:33:44:55' },
+        1_000,
+      )
+      registerNode(topologyId, controller, CONTROLLER, 2_000)
+      registerNode(topologyId, reader, READ, 3_000, true)
+      expect(liveNodes(topologyId)).toHaveLength(2)
+    })
+
+    test('keeps how the device is read when it merges', () => {
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'access')
+      registerNode(topologyId, controller, CONTROLLER, 1_000)
+      registerNode(topologyId, inventory, INVENTORY, 2_000)
+      // the device is read by the entity the inventory made, the newer one, which merges away
+      const byAddress = db
+        .query<{ entity_id: string }, [string, string]>(
+          `SELECT entity_id FROM entity_identity_key
+            WHERE topology_id = ? AND kind = 'node' AND key = 'mgmtIp' AND source_id = ?`,
+        )
+        .get(topologyId, inventory)?.entity_id
+      expect(byAddress).toBeDefined()
+      db.query(
+        `INSERT INTO device_access (entity_id, topology_id, enabled, last_status, updated_at)
+         VALUES (?, ?, 1, 'ok', 0)`,
+      ).run(byAddress ?? '', topologyId)
+      registerNode(topologyId, reader, READ, 3_000, true)
+      const [survivor] = liveNodes(topologyId)
+      const access = db
+        .query<{ entity_id: string; last_status: string }, [string]>(
+          'SELECT entity_id, last_status FROM device_access WHERE topology_id = ?',
+        )
+        .all(topologyId)
+      expect(access).toEqual([{ entity_id: survivor ?? '', last_status: 'ok' }])
+    })
+
+    test('the credential that reads the device wins over an empty row of the survivor', () => {
+      const topologyId = makeTopology(db)
+      const [inventory, controller, reader] = sources(topologyId, 'empty-row')
+      registerNode(topologyId, controller, CONTROLLER, 1_000)
+      registerNode(topologyId, inventory, INVENTORY, 2_000)
+      const entityOf = (sourceId: string, key: string) =>
+        db
+          .query<{ entity_id: string }, [string, string, string]>(
+            `SELECT entity_id FROM entity_identity_key
+              WHERE topology_id = ? AND kind = 'node' AND key = ? AND source_id = ?`,
+          )
+          .get(topologyId, key, sourceId)?.entity_id ?? ''
+      // the survivor was tried on another of its addresses and answered none
+      db.query(
+        `INSERT INTO device_access (entity_id, topology_id, enabled, tried_at, updated_at)
+         VALUES (?, ?, 1, 5, 0)`,
+      ).run(entityOf(controller, 'chassisId'), topologyId)
+      db.query(
+        `INSERT INTO credential
+           (id, name, method, params_json, secret_json, secret_changed_at, created_at, updated_at)
+         VALUES ('cred-empty-row', 'c', 'snmp', '{}', '{}', 0, 0, 0)`,
+      ).run()
+      db.query(
+        `INSERT INTO device_access (entity_id, topology_id, credential_id, enabled, last_status, updated_at)
+         VALUES (?, ?, 'cred-empty-row', 1, 'ok', 0)`,
+      ).run(entityOf(inventory, 'mgmtIp'), topologyId)
+      registerNode(topologyId, reader, READ, 3_000, true)
+      const [survivor] = liveNodes(topologyId)
+      const access = db
+        .query<{ entity_id: string; credential_id: string | null }, [string]>(
+          'SELECT entity_id, credential_id FROM device_access WHERE topology_id = ?',
+        )
+        .all(topologyId)
+      expect(access).toEqual([{ entity_id: survivor ?? '', credential_id: 'cred-empty-row' }])
+    })
+  })
+
+  describe('an observation that each candidate is shown to be', () => {
+    test('merges a candidate found by its chassis with one that agrees on address and sysName', () => {
+      // each is shown to be the observed device on its own: the chassis, or two independent keys
+      const topologyId = makeTopology(db)
+      const controller = insertDataSource('cvcue-mixed')
+      const inventory = insertDataSource('config-mixed')
+      const neighbour = insertDataSource('lldp-mixed')
+      for (const s of [controller, inventory, neighbour]) attachSource(topologyId, s, 'topology')
+      const node = (identity: Record<string, string>) => ({
+        name: 'g',
+        nodes: [{ id: 'n', label: 'n', identity, ports: [] }],
+        links: [],
+      })
+      ingestAndRegister(db, topologyId, controller, node({ chassisId: 'aa:aa:aa:00:00:01' }), 1_000)
+      ingestAndRegister(
+        db,
+        topologyId,
+        inventory,
+        node({ mgmtIp: '10.9.9.1', sysName: 'mixed-sw' }),
+        2_000,
+      )
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+      ingestAndRegister(
+        db,
+        topologyId,
+        neighbour,
+        node({ chassisId: 'aa:aa:aa:00:00:01', mgmtIp: '10.9.9.1', sysName: 'mixed-sw' }),
+        3_000,
+      )
+      const live = db
+        .query<{ n: number }, [string]>(
+          `SELECT COUNT(*) AS n FROM entity_registry WHERE topology_id = ? AND kind = 'node'
+           AND id NOT IN (SELECT old_id FROM entity_alias)`,
+        )
+        .get(topologyId)?.n
+      expect(live).toBe(1)
+    })
+  })
+
   // -------------------------------------------------------------------------
   // @570: Per-source singleton-key replacement
   // -------------------------------------------------------------------------
