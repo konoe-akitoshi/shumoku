@@ -14,7 +14,7 @@
  * involved in an SNMP read.
  */
 
-import type { inputModel, SourceNetwork } from '@shumoku/core'
+import { asEntityId, type inputModel, type SourceNetwork } from '@shumoku/core'
 import { getDatabase, timestamp } from '../db/index.js'
 import { trialDevices } from '../discovery/credential-trial.js'
 import { type DeepReadTarget, deepReadDevices } from '../discovery/deep-read.js'
@@ -28,6 +28,7 @@ import {
   resolveReadTargets,
   resolveTrialCandidates,
 } from './device-access.js'
+import { resolveEntityAlias } from './entity-registry.js'
 import type { ObservationsService, TopologyObservation } from './observations.js'
 import type { TopologyService } from './topology.js'
 
@@ -198,7 +199,18 @@ export async function runDeepRead(
   // reading three switches doesn't wipe the other twenty already known. Reuse
   // the same node-replace merge the probe path uses.
   const prior = observations.getContribution(topologyId, DEEP_READ_SOURCE_ID)
-  const merged = mergeReadIntoSnapshot(prior, result.source, new Set(result.linksRead))
+  // A device turned off while it was being read is left out: the read knows whom it read at each
+  // address, so the device's access is asked again now, not when the read was planned.
+  const readFor = new Map(
+    result.source.network.nodes.flatMap((n) => {
+      const entityId = n.address ? entityByAddress.get(n.address) : undefined
+      return entityId ? [[n.id, entityId] as const] : []
+    }),
+  )
+  const merged = keepReadable(
+    mergeReadIntoSnapshot(prior, result.source, new Set(result.linksRead)),
+    readableOf(topologyId, readFor),
+  )
 
   const observation = await observations.record({
     topologyId,
@@ -208,6 +220,130 @@ export async function runDeepRead(
     source: merged,
   })
   return { observation, outcomes, trial, plan }
+}
+
+/**
+ * What deep-read has read stays in the drawing only while the device can be read: enabled, with a
+ * credential the topology links. Turning that off (excluding the device, taking its credential
+ * away or deleting it, unlinking the credential from the topology) is a person's choice, so the
+ * device's reading is taken out at once, with the neighbours and links only it brought. A read
+ * that merely failed takes nothing out: the device is `lost`, and its last reading stays.
+ * Returns whether the drawing changed.
+ */
+export async function withdrawUnreadable(
+  topologyId: string,
+  observations: ObservationsService,
+): Promise<boolean> {
+  const prior = observations.getContribution(topologyId, DEEP_READ_SOURCE_ID)
+  if (!prior) return false
+  const kept = keepReadable(prior, readableOf(topologyId))
+  if (kept.network.nodes.length === prior.network.nodes.length) return false
+  const observation = await observations.record({
+    topologyId,
+    sourceId: DEEP_READ_SOURCE_ID,
+    capturedAt: Date.now(),
+    status: 'ok',
+    source: kept,
+  })
+  return observation.contributionChanged === true
+}
+
+/** The topologies deep-read has read anything into. */
+export function topologiesWithReadings(): string[] {
+  return (
+    getDatabase()
+      .query('SELECT topology_id FROM contribution_source WHERE source_id = ?')
+      .all(DEEP_READ_SOURCE_ID) as Array<{ topology_id: string }>
+  ).map((r) => r.topology_id)
+}
+
+/**
+ * Take every reading out of the topology. The credentials and which devices they read are kept;
+ * the devices go back to waiting for their first read.
+ */
+export function clearReadings(topologyId: string, observations: ObservationsService): number {
+  const deleted = observations.deleteForSource(topologyId, DEEP_READ_SOURCE_ID)
+  getDatabase()
+    .query(
+      `UPDATE device_access SET last_read_at = NULL, last_status = NULL, last_error = NULL,
+              updated_at = ? WHERE topology_id = ?`,
+    )
+    .run(timestamp(), topologyId)
+  return deleted
+}
+
+/**
+ * Whether a node of the deep-read snapshot is a device it read that may still be read. The node
+ * is known by the entity the registry gave it, followed through merges to the device the drawing
+ * shows; that device's own access row decides, as it decides what a read reads
+ * (`resolveReadTargets`). A row left on an entity merged away does not count. A node just read is
+ * known by the device it was read for (`readFor`); a node neither knows stays.
+ */
+export function readableOf(
+  topologyId: string,
+  readFor: ReadonlyMap<string, string> = new Map(),
+): (nodeId: string) => boolean {
+  const db = getDatabase()
+  const readable = new Set(
+    (
+      db
+        .query(
+          `SELECT da.entity_id FROM device_access da
+             JOIN topology_credential tc
+               ON tc.topology_id = da.topology_id AND tc.credential_id = da.credential_id
+            WHERE da.topology_id = ? AND da.enabled = 1`,
+        )
+        .all(topologyId) as Array<{ entity_id: string }>
+    ).map((r) => r.entity_id),
+  )
+  const resolve = (id: string) => resolveEntityAlias(asEntityId(id), db)
+  const entityOf = new Map(
+    (
+      db
+        .query(
+          `SELECT local_id, entity_id FROM entity_element
+            WHERE topology_id = ? AND source_id = ? AND kind = 'node'`,
+        )
+        .all(topologyId, DEEP_READ_SOURCE_ID) as Array<{ local_id: string; entity_id: string }>
+    ).map((r) => [r.local_id, resolve(r.entity_id)] as const),
+  )
+  return (nodeId) => {
+    const entity = readFor.get(nodeId) ?? entityOf.get(nodeId)
+    return entity === undefined || readable.has(entity)
+  }
+}
+
+/**
+ * The snapshot without the devices that may not be read: their nodes, the links that end at them,
+ * and the neighbours (named over LLDP, never read) that no link left reaches.
+ */
+export function keepReadable(
+  snapshot: SourceNetwork,
+  readable: (nodeId: string) => boolean,
+): SourceNetwork {
+  const read = (id: string) => snapshot.observation?.nodes?.[id]?.metadata?.['readVia'] === 'snmp'
+  const dropped = new Set(
+    snapshot.network.nodes.filter((n) => read(n.id) && !readable(n.id)).map((n) => n.id),
+  )
+  if (dropped.size === 0) return snapshot
+  const links = snapshot.network.links.filter((l) => !nodeEnds(l).some((id) => dropped.has(id)))
+  const reached = new Set(links.flatMap(nodeEnds))
+  const nodes = snapshot.network.nodes.filter((n) =>
+    read(n.id) ? !dropped.has(n.id) : reached.has(n.id),
+  )
+  const nodeIds = new Set(nodes.map((n) => n.id))
+  const linkIds = new Set(links.flatMap((l) => (l.id ? [l.id] : [])))
+  const drawingNodes = pick(snapshot.drawing?.nodes, (id) => nodeIds.has(id))
+  const drawingLinks = pick(snapshot.drawing?.links, (id) => linkIds.has(id))
+  const hasDrawing = Object.keys(drawingNodes).length > 0 || Object.keys(drawingLinks).length > 0
+  return {
+    network: { nodes, links },
+    observation: {
+      nodes: pick(snapshot.observation?.nodes, (id) => nodeIds.has(id)),
+      links: pick(snapshot.observation?.links, (id) => linkIds.has(id)),
+    },
+    ...(hasDrawing ? { drawing: { nodes: drawingNodes, links: drawingLinks } } : {}),
+  }
 }
 
 /** The entries of a layer record whose key is kept. */

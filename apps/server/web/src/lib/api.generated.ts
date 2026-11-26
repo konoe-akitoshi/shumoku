@@ -1426,6 +1426,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/topologies/{id}/devices/readings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Take every device reading out of the topology; credentials and which devices they read are kept */
+        delete: operations["deleteTopologiesByIdDevicesReadings"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/credentials": {
         parameters: {
             query?: never;
@@ -2478,6 +2495,9 @@ export interface components {
         ReadDevices: {
             entityIds?: string[];
             dryRun?: boolean;
+        };
+        ClearReadingsResult: {
+            deleted: number;
         };
         Credentials: {
             methods: {
@@ -7965,6 +7985,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReadDevicesResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Topology or credential not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Device operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteTopologiesByIdDevicesReadings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many stored snapshots went */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearReadingsResult"];
                 };
             };
             /** @description The request did not match the API contract */

@@ -9,7 +9,9 @@ import {
   topologyExists,
   updateCredential,
 } from '../services/credentials.js'
+import { topologiesWithReadings, withdrawUnreadable } from '../services/deep-read-service.js'
 import { deviceNodes, listDeviceAccess } from '../services/device-access.js'
+import type { ObservationsService } from '../services/observations.js'
 import type { TopologyService } from '../services/topology.js'
 import type { CredentialApplicationService, CredentialResult } from './services.js'
 
@@ -19,10 +21,22 @@ function failure(status: 400 | 404 | 409 | 500, error: string): CredentialResult
 
 export function createCredentialApplicationService(dependencies: {
   topologies: TopologyService
+  observations: ObservationsService
   /** Injectable so the test path can be exercised without a network. */
   probe?: Probe
 }): CredentialApplicationService {
-  const { topologies, probe = probeSnmp } = dependencies
+  const { topologies, observations, probe = probeSnmp } = dependencies
+
+  /** A credential that no longer reads a device takes that device's reading out of the drawing. */
+  async function withdraw(): Promise<void> {
+    for (const topologyId of topologiesWithReadings()) {
+      if (await withdrawUnreadable(topologyId, observations)) {
+        topologies.clearCacheEntry(topologyId)
+        topologies.precompute(topologyId)
+      }
+    }
+  }
+
   return {
     list() {
       return { ok: true, value: { methods: ACCESS_METHODS, credentials: listCredentialsAdmin() } }
@@ -34,15 +48,17 @@ export function createCredentialApplicationService(dependencies: {
       return { ok: true, value: result }
     },
 
-    update(id, patch) {
+    async update(id, patch) {
       const result = updateCredential(id, patch)
       if ('error' in result) return failure(result.status, result.error)
+      await withdraw()
       return { ok: true, value: result }
     },
 
-    delete(id) {
+    async delete(id) {
       const result = deleteCredential(id)
       if (!result) return failure(404, 'Credential not found')
+      await withdraw()
       return { ok: true, value: result }
     },
 

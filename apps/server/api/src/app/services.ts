@@ -565,7 +565,12 @@ export interface DeviceApplicationService {
     topologyId: string,
     entityIds: string[],
     patch: DeviceAccessPatch,
-  ): DeviceResult<{ updated: number; skipped: string[] }>
+  ): Promise<DeviceResult<{ updated: number; skipped: string[] }>>
+  /**
+   * Take every reading out of the topology; credentials and which devices they read are kept,
+   * the devices wait for their next read. Returns how many stored snapshots went.
+   */
+  clearReadings(topologyId: string): DeviceResult<{ deleted: number }>
   /**
    * Read devices now. `entityIds` null = every device. Devices without a
    * credential are first tried with each credential the topology links. `dryRun` sends nothing and only
@@ -597,8 +602,8 @@ export interface CredentialApplicationService {
   update(
     id: string,
     patch: { name?: string; params?: Record<string, unknown>; topologyIds?: string[] },
-  ): CredentialResult<{ credential: CredentialAdminView; effect: CredentialEffect[] }>
-  delete(id: string): CredentialResult<{ unassigned: number; topologies: number }>
+  ): Promise<CredentialResult<{ credential: CredentialAdminView; effect: CredentialEffect[] }>>
+  delete(id: string): Promise<CredentialResult<{ unassigned: number; topologies: number }>>
   /** Probe a sample of one topology's devices with the given credential; stores nothing. */
   test(input: {
     topologyId: string

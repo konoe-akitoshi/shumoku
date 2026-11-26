@@ -631,7 +631,10 @@ export class Server {
         topologies: topologyService,
         observations: observationsService,
       }),
-      credentials: createCredentialApplicationService({ topologies: topologyService }),
+      credentials: createCredentialApplicationService({
+        topologies: topologyService,
+        observations: observationsService,
+      }),
       share: createShareApplicationService({
         topologies: topologyService,
         dashboards: dashboardService,
