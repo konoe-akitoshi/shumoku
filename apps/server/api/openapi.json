@@ -3387,6 +3387,17 @@
           }
         }
       },
+      "ClearReadingsResult": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted"
+        ]
+      },
       "Credentials": {
         "type": "object",
         "properties": {
@@ -12216,6 +12227,86 @@
           }
         },
         "operationId": "postTopologiesByIdDevicesRead"
+      }
+    },
+    "/topologies/{id}/devices/readings": {
+      "delete": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Take every device reading out of the topology; credentials and which devices they read are kept",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many stored snapshots went",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClearReadingsResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Topology or credential not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Device operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "deleteTopologiesByIdDevicesReadings"
       }
     },
     "/credentials": {

@@ -265,11 +265,11 @@ export function createCredentialsApi(services: Pick<AppServices, 'credentials'>)
 
   app.openapi(testRoute, async (c) => respond200(c, await service.test(c.req.valid('json'))))
 
-  app.openapi(updateRoute, (c) =>
-    respond200(c, service.update(c.req.param('id'), c.req.valid('json'))),
+  app.openapi(updateRoute, async (c) =>
+    respond200(c, await service.update(c.req.param('id'), c.req.valid('json'))),
   )
 
-  app.openapi(deleteRoute, (c) => respond200(c, service.delete(c.req.param('id'))))
+  app.openapi(deleteRoute, async (c) => respond200(c, await service.delete(c.req.param('id'))))
 
   return app
 }

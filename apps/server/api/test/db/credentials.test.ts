@@ -30,6 +30,7 @@ import {
   resolveReadTargets,
   setDeviceAccess,
 } from '../../src/services/device-access.ts'
+import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import { getDatabase, setupTempDb, type TempDb, timestamp } from './helper.ts'
 
@@ -385,7 +386,11 @@ describe('credential test', () => {
       seen.push(`${address}|${community}`)
       return address.endsWith('.1') || address.endsWith('.2')
     }
-    const service = createCredentialApplicationService({ topologies: fakeTopologies, probe })
+    const service = createCredentialApplicationService({
+      topologies: fakeTopologies,
+      observations: new ObservationsService(),
+      probe,
+    })
     const rowsBefore = getDatabase().query('SELECT COUNT(*) AS n FROM device_access').get()
     const adminBefore = JSON.stringify(listCredentialsAdmin())
 
@@ -418,6 +423,7 @@ describe('credential test', () => {
     } as unknown as TopologyService
     const service = createCredentialApplicationService({
       topologies: noAddress,
+      observations: new ObservationsService(),
       probe: async () => true,
     })
     expect(await service.test({ topologyId: t.id, method: 'snmp' })).toMatchObject({

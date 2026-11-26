@@ -186,14 +186,15 @@ const services: AppServices = {
   },
   devices: {
     list: async () => ({ ok: false, status: 404, error: 'Not executed' }),
-    assign: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    assign: async () => ({ ok: false, status: 404, error: 'Not executed' }),
     read: async () => ({ ok: false, status: 404, error: 'Not executed' }),
+    clearReadings: () => ({ ok: false, status: 404, error: 'Not executed' }),
   },
   credentials: {
     list: () => ({ ok: false, status: 404, error: 'Not executed' }),
     create: () => ({ ok: false, status: 404, error: 'Not executed' }),
-    update: () => ({ ok: false, status: 404, error: 'Not executed' }),
-    delete: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    update: async () => ({ ok: false, status: 404, error: 'Not executed' }),
+    delete: async () => ({ ok: false, status: 404, error: 'Not executed' }),
     test: async () => ({ ok: false, status: 404, error: 'Not executed' }),
   },
   share: {

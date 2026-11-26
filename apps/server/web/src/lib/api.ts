@@ -862,6 +862,19 @@ export const topologies = {
       if (!data) return contractError(error, response)
       return data
     },
+
+    /**
+     * Take every reading out of the topology. Credentials and which devices they read are kept;
+     * the devices wait for their next read.
+     */
+    clearReadings: async (id: string): Promise<{ deleted: number }> => {
+      const { data, error, response } = await contractClient.DELETE(
+        '/topologies/{id}/devices/readings',
+        { params: { path: { id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
   },
 
   /**

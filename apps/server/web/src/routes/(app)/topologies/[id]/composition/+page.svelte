@@ -264,6 +264,25 @@
     if (!ok) notice = null
   }
 
+  /** Take every reading out of the drawing; the credentials stay. */
+  async function clearReadings() {
+    notice = null
+    if (
+      !confirm(
+        '読み取った結果（ポート・機種・LLDP でつながる隣の機器）を図から消します。認証情報と、どの機器をどの認証情報で読むかは残ります。',
+      )
+    )
+      return
+    const ok = await mutate(
+      async () => {
+        await api.topologies.devices.clearReadings(ctx.topologyId)
+        notice = { text: '読み取り結果を消しました。もう一度読み取ると戻ります。' }
+      },
+      { redraw: true },
+    )
+    if (!ok) notice = null
+  }
+
   function openSheet(id: string | null) {
     sheetCredentialId = id
     sheetOpen = true
@@ -411,6 +430,9 @@
         <div class="flex flex-wrap items-center gap-2">
           <Button size="sm" disabled={busy || credentials.length === 0} onclick={() => startRead()}>
             {busy && detailId === null ? '読み取り中…' : '読み取る'}
+          </Button>
+          <Button size="sm" variant="outline" disabled={busy} onclick={clearReadings}>
+            読み取り結果を消す
           </Button>
         </div>
 

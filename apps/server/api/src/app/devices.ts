@@ -1,6 +1,11 @@
 import { ACCESS_METHODS } from '../services/access-methods.js'
 import { listCredentialsForTopology, topologyClock } from '../services/credentials.js'
-import { planDeepRead, runDeepRead } from '../services/deep-read-service.js'
+import {
+  clearReadings,
+  planDeepRead,
+  runDeepRead,
+  withdrawUnreadable,
+} from '../services/deep-read-service.js'
 import { deriveDeviceState, listDeviceAccess, setDeviceAccess } from '../services/device-access.js'
 import type { ObservationsService } from '../services/observations.js'
 import type { TopologyService } from '../services/topology.js'
@@ -55,11 +60,24 @@ export function createDeviceApplicationService(dependencies: {
       }
     },
 
-    assign(topologyId, entityIds, patch) {
+    async assign(topologyId, entityIds, patch) {
       if (!topologies.get(topologyId)) return failure(404, 'Topology not found')
       const result = setDeviceAccess(topologyId, entityIds, patch)
       if ('error' in result) return failure(result.status, result.error)
+      // a device excluded or left without a credential takes its reading out of the drawing
+      if (await withdrawUnreadable(topologyId, observations)) {
+        topologies.clearCacheEntry(topologyId)
+        topologies.precompute(topologyId)
+      }
       return { ok: true, value: result }
+    },
+
+    clearReadings(topologyId) {
+      if (!topologies.get(topologyId)) return failure(404, 'Topology not found')
+      const deleted = clearReadings(topologyId, observations)
+      topologies.clearCacheEntry(topologyId)
+      topologies.precompute(topologyId)
+      return { ok: true, value: { deleted } }
     },
 
     async read(topologyId, entityIds, options) {

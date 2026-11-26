@@ -221,6 +221,30 @@ const readRoute = createRoute({
     500: errors[500],
   },
 })
+const clearReadingsRoute = createRoute({
+  method: 'delete',
+  path: '/{id}/devices/readings',
+  tags: ['Devices'],
+  summary:
+    'Take every device reading out of the topology; credentials and which devices they read are kept',
+  security: protectedRouteSecurity,
+  request: { params: TopologyParamsSchema },
+  responses: {
+    200: {
+      description: 'How many stored snapshots went',
+      content: {
+        'application/json': {
+          schema: z.object({ deleted: z.number().int() }).openapi('ClearReadingsResult'),
+        },
+      },
+    },
+    400: errors[400],
+    404: errors[404],
+    409: errors[409],
+    500: errors[500],
+  },
+})
+
 export function createDevicesApi(services: Pick<AppServices, 'devices'>): OpenAPIHono {
   const app = createOpenAPIApp()
   const service = services.devices
@@ -234,11 +258,11 @@ export function createDevicesApi(services: Pick<AppServices, 'devices'>): OpenAP
 
   app.openapi(listRoute, async (c) => respond200(c, await service.list(c.req.param('id'))))
 
-  app.openapi(assignRoute, (c) => {
+  app.openapi(assignRoute, async (c) => {
     const body = c.req.valid('json')
     return respond200(
       c,
-      service.assign(c.req.param('id'), body.entityIds, {
+      await service.assign(c.req.param('id'), body.entityIds, {
         ...(body.credentialId !== undefined ? { credentialId: body.credentialId } : {}),
         ...(body.enabled !== undefined ? { enabled: body.enabled } : {}),
       }),
@@ -256,6 +280,8 @@ export function createDevicesApi(services: Pick<AppServices, 'devices'>): OpenAP
       }),
     )
   })
+
+  app.openapi(clearReadingsRoute, (c) => respond200(c, service.clearReadings(c.req.param('id'))))
 
   return app
 }
