@@ -199,9 +199,17 @@ export async function runDeepRead(
   // reading three switches doesn't wipe the other twenty already known. Reuse
   // the same node-replace merge the probe path uses.
   const prior = observations.getContribution(topologyId, DEEP_READ_SOURCE_ID)
+  // A device turned off while it was being read is left out: the read knows whom it read at each
+  // address, so the device's access is asked again now, not when the read was planned.
+  const readFor = new Map(
+    result.source.network.nodes.flatMap((n) => {
+      const entityId = n.address ? entityByAddress.get(n.address) : undefined
+      return entityId ? [[n.id, entityId] as const] : []
+    }),
+  )
   const merged = keepReadable(
     mergeReadIntoSnapshot(prior, result.source, new Set(result.linksRead)),
-    readableOf(topologyId),
+    readableOf(topologyId, readFor),
   )
 
   const observation = await observations.record({
@@ -268,10 +276,13 @@ export function clearReadings(topologyId: string, observations: ObservationsServ
  * Whether a node of the deep-read snapshot is a device it read that may still be read. The node
  * is known by the entity the registry gave it, followed through merges to the device the drawing
  * shows; that device's own access row decides, as it decides what a read reads
- * (`resolveReadTargets`). A row left on an entity merged away does not count. A node the registry
- * has not placed yet stays.
+ * (`resolveReadTargets`). A row left on an entity merged away does not count. A node just read is
+ * known by the device it was read for (`readFor`); a node neither knows stays.
  */
-function readableOf(topologyId: string): (nodeId: string) => boolean {
+export function readableOf(
+  topologyId: string,
+  readFor: ReadonlyMap<string, string> = new Map(),
+): (nodeId: string) => boolean {
   const db = getDatabase()
   const readable = new Set(
     (
@@ -297,7 +308,7 @@ function readableOf(topologyId: string): (nodeId: string) => boolean {
     ).map((r) => [r.local_id, resolve(r.entity_id)] as const),
   )
   return (nodeId) => {
-    const entity = entityOf.get(nodeId)
+    const entity = readFor.get(nodeId) ?? entityOf.get(nodeId)
     return entity === undefined || readable.has(entity)
   }
 }

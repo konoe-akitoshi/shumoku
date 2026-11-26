@@ -14,6 +14,8 @@ import { getDatabase, timestamp } from '../../src/db/index.ts'
 import {
   clearReadings,
   DEEP_READ_SOURCE_ID,
+  keepReadable,
+  readableOf,
   withdrawUnreadable,
 } from '../../src/services/deep-read-service.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
@@ -149,6 +151,16 @@ describe('deep-read readings follow device access', () => {
     db.query('UPDATE device_access SET enabled = 0 WHERE entity_id = ?').run(t.entityOf(A))
     expect(await withdrawUnreadable(t.id, observations)).toBe(true)
     expect(t.nodes()).toEqual([B])
+  })
+
+  test('a device turned off while it was being read stays out when the read lands', async () => {
+    const t = await topology('racing')
+    const a = t.entityOf(A)
+    getDatabase().query('UPDATE device_access SET enabled = 0 WHERE entity_id = ?').run(a)
+    expect(await withdrawUnreadable(t.id, observations)).toBe(true)
+    // the read that was running brings A back; the registry no longer knows its node
+    const landed = keepReadable(reading, readableOf(t.id, new Map([[A, a]])))
+    expect(landed.network.nodes.map((n) => n.id)).toEqual([B])
   })
 
   test('a device that only failed to answer keeps its reading', async () => {
