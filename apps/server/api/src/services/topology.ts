@@ -63,6 +63,7 @@ import {
 } from './entity-registry.js'
 import { planLinkAutoMap, unionInterfacesAcrossSources } from './link-automap.js'
 import { type DeviceAttributes, type ResolvedRecord, rekeyRecord } from './resolved-record.js'
+import { computeScopeSources } from './scope-sources.js'
 import { TopologySourcesService } from './topology-sources.js'
 
 /**
@@ -425,28 +426,6 @@ function applySourceMode(source: SourceNetwork, mode: SourceMode): SourceNetwork
         }),
     },
   }
-}
-
-/**
- * Resolve the topology's scope policy to the set of SOURCE ids whose regions
- * close the world:
- *   - 'open'   → none (pure union)
- *   - 'closed' → just `scopeSourceId`
- *   - 'auto'   → the highest-priority topology-purpose source(s)
- * This is the scope POLICY; resolve() is pure mechanism (honors the `scope:'closed'`
- * marks this drives). Empty set → no scoping.
- */
-function computeScopeSources(
-  scopeMode: ScopeMode,
-  scopeSourceId: string | undefined,
-  topologySources: { dataSourceId: string; purpose: string; priority: number }[],
-): Set<string> {
-  if (scopeMode === 'open') return new Set()
-  if (scopeMode === 'closed') return new Set(scopeSourceId ? [scopeSourceId] : [])
-  const topo = topologySources.filter((s) => s.purpose === 'topology')
-  if (topo.length === 0) return new Set()
-  const maxPriority = topo.reduce((m, s) => Math.max(m, s.priority), Number.NEGATIVE_INFINITY)
-  return new Set(topo.filter((s) => s.priority === maxPriority).map((s) => s.dataSourceId))
 }
 
 /**
@@ -1620,10 +1599,10 @@ export class TopologyService {
     // resolve() is pure mechanism: it honors `scope:'closed'` marks; we stamp them
     // here per the topology's policy, on both the scope source(s) and the overlay
     // (operator-curated regions also scope, unless the topology is 'open').
-    const scopeSourceIds = computeScopeSources(
+    const scopeSourceIds = this.scopeSources(
+      topology.id,
       topology.scopeMode,
       topology.scopeSourceId,
-      topologySources,
     )
     const scoped =
       topology.scopeMode !== 'open' && (overlay.network.groups?.length ?? 0) > 0
@@ -1684,6 +1663,40 @@ export class TopologyService {
    *     attached sources appear (the `priorityBySource` guard is a belt-and-braces
    *     filter on top of that).
    */
+  /** The sources the 'auto' scope takes as the boundary: what a bake uses, for the UI to show. */
+  autoScopeSourceIds(topologyId: string): string[] {
+    return [...this.scopeSources(topologyId, 'auto', undefined)]
+  }
+
+  /**
+   * The sources whose regions close the world under a scope policy. Which sources hold regions
+   * is read from their stored contributions, so legacy observations are brought into the store
+   * first (the bake's snapshot read would do it only afterwards).
+   */
+  private scopeSources(
+    topologyId: string,
+    scopeMode: ScopeMode,
+    scopeSourceId: string | undefined,
+  ): Set<string> {
+    this.backfillObservedContributions(topologyId)
+    const withRegions = new Set(
+      (
+        this.db
+          .query(
+            `SELECT DISTINCT source_id FROM contribution_element
+              WHERE topology_id = ? AND kind = 'subgraph'`,
+          )
+          .all(topologyId) as { source_id: string }[]
+      ).map((r) => r.source_id),
+    )
+    return computeScopeSources(
+      scopeMode,
+      scopeSourceId,
+      this.topologySources.listByTopology(topologyId),
+      (sourceId) => withRegions.has(sourceId),
+    )
+  }
+
   private readObservedSnapshots(
     topologyId: string,
     priorityBySource: Map<string, number>,

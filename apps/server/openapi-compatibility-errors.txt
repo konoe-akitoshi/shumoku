@@ -17,3 +17,14 @@ POST /topologies/{topologyId}/sources/{sourceId}/probe api path removed without 
 GET /topologies/{id}/graph api path removed without deprecation
 GET /share/topologies/{token}/graph api path removed without deprecation
 GET /share/dashboards/{token}/topologies/{id}/graph api path removed without deprecation
+# PR #959: intentional removal. The per-source node/link contribution modes have been vestigial
+# since migration 022 moved the merge method onto the topology (`compositionMode`): the API took
+# and returned them, but resolve never read them. Only the web UI's types named them.
+GET /topologies/{topologyId}/sources removed the required property `items/linkContribution` from the response with the `200` status
+GET /topologies/{topologyId}/sources removed the required property `items/nodeContribution` from the response with the `200` status
+POST /topologies/{topologyId}/sources removed the required property `anyOf[#/components/schemas/TopologyDataSource]/linkContribution` from the response with the `201` status
+POST /topologies/{topologyId}/sources removed the required property `anyOf[#/components/schemas/TopologyDataSource]/nodeContribution` from the response with the `201` status
+PUT /topologies/{topologyId}/sources removed the required property `items/linkContribution` from the response with the `200` status
+PUT /topologies/{topologyId}/sources removed the required property `items/nodeContribution` from the response with the `200` status
+PUT /topologies/{topologyId}/sources/{sourceId} removed the required property `linkContribution` from the response with the `200` status
+PUT /topologies/{topologyId}/sources/{sourceId} removed the required property `nodeContribution` from the response with the `200` status

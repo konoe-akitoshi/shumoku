@@ -2664,12 +2664,19 @@
               "additive",
               "enrichment"
             ]
+          },
+          "autoScopeSourceIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "scopeMode",
           "scope",
-          "compositionMode"
+          "compositionMode",
+          "autoScopeSourceIds"
         ]
       },
       "TopologyDataSource": {
@@ -2711,20 +2718,6 @@
           "optionsJson": {
             "type": "string"
           },
-          "nodeContribution": {
-            "type": "string",
-            "enum": [
-              "scoop",
-              "anchor"
-            ]
-          },
-          "linkContribution": {
-            "type": "string",
-            "enum": [
-              "add",
-              "update"
-            ]
-          },
           "createdAt": {
             "type": "integer"
           },
@@ -2742,8 +2735,6 @@
           "purpose",
           "syncMode",
           "priority",
-          "nodeContribution",
-          "linkContribution",
           "createdAt",
           "updatedAt"
         ]
@@ -2777,20 +2768,6 @@
               },
               "optionsJson": {
                 "type": "string"
-              },
-              "nodeContribution": {
-                "type": "string",
-                "enum": [
-                  "scoop",
-                  "anchor"
-                ]
-              },
-              "linkContribution": {
-                "type": "string",
-                "enum": [
-                  "add",
-                  "update"
-                ]
               }
             },
             "required": [
@@ -2838,20 +2815,6 @@
           },
           "optionsJson": {
             "type": "string"
-          },
-          "nodeContribution": {
-            "type": "string",
-            "enum": [
-              "scoop",
-              "anchor"
-            ]
-          },
-          "linkContribution": {
-            "type": "string",
-            "enum": [
-              "add",
-              "update"
-            ]
           }
         }
       },
@@ -10709,20 +10672,6 @@
                         },
                         "optionsJson": {
                           "type": "string"
-                        },
-                        "nodeContribution": {
-                          "type": "string",
-                          "enum": [
-                            "scoop",
-                            "anchor"
-                          ]
-                        },
-                        "linkContribution": {
-                          "type": "string",
-                          "enum": [
-                            "add",
-                            "update"
-                          ]
                         }
                       },
                       "required": [

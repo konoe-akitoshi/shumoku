@@ -22,8 +22,6 @@ export const TopologyDataSourceSchema = z
     lastSyncedAt: z.number().int().optional(),
     priority: z.number().int(),
     optionsJson: z.string().optional(),
-    nodeContribution: z.enum(['scoop', 'anchor']),
-    linkContribution: z.enum(['add', 'update']),
     createdAt: z.number().int(),
     updatedAt: z.number().int(),
     dataSource: DataSourceSchema.optional(),
@@ -36,8 +34,6 @@ const ExistingSourceInputSchema = z.object({
   syncMode: z.enum(['manual', 'on_view', 'webhook']).optional(),
   priority: z.number().int().optional(),
   optionsJson: z.string().optional(),
-  nodeContribution: z.enum(['scoop', 'anchor']).optional(),
-  linkContribution: z.enum(['add', 'update']).optional(),
 })
 
 export const AddTopologySourceSchema = z

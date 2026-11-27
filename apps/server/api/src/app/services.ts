@@ -366,6 +366,8 @@ export interface TopologyCompositionView {
   scopeSourceId?: string
   scope: ScopeFilter
   compositionMode: CompositionMode
+  /** The sources 'auto' takes as the boundary: those holding regions, highest priority first. */
+  autoScopeSourceIds: string[]
 }
 
 export type TopologyReadResult<T> =

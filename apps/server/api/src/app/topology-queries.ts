@@ -100,12 +100,13 @@ function recordView(parsed: ParsedTopology): ResolvedRecordView {
   return { nodes, links }
 }
 
-function compositionOf(topology: Topology): TopologyCompositionView {
+function compositionOf(topology: Topology, autoScopeSourceIds: string[]): TopologyCompositionView {
   return {
     scopeMode: topology.scopeMode,
     scopeSourceId: topology.scopeSourceId,
     scope: topology.scope,
     compositionMode: topology.compositionMode,
+    autoScopeSourceIds,
   }
 }
 
@@ -269,7 +270,7 @@ export function createTopologyQueryApplicationService(
     getComposition(id) {
       const topology = service.get(id)
       return topology
-        ? { kind: 'ready', value: compositionOf(topology) }
+        ? { kind: 'ready', value: compositionOf(topology, service.autoScopeSourceIds(id)) }
         : { kind: 'error', status: 404, error: 'Topology not found' }
     },
     updateComposition(id, input) {
@@ -288,7 +289,7 @@ export function createTopologyQueryApplicationService(
           topology = service.setCompositionMode(id, input.compositionMode)
         }
         return topology
-          ? { kind: 'ready', value: compositionOf(topology) }
+          ? { kind: 'ready', value: compositionOf(topology, service.autoScopeSourceIds(id)) }
           : { kind: 'error', status: 404, error: 'Topology not found' }
       } catch (error) {
         return {

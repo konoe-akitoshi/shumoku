@@ -2316,6 +2316,7 @@ export interface components {
             };
             /** @enum {string} */
             compositionMode: "additive" | "enrichment";
+            autoScopeSourceIds: string[];
         };
         TopologyDataSource: {
             id: string;
@@ -2329,10 +2330,6 @@ export interface components {
             lastSyncedAt?: number;
             priority: number;
             optionsJson?: string;
-            /** @enum {string} */
-            nodeContribution: "scoop" | "anchor";
-            /** @enum {string} */
-            linkContribution: "add" | "update";
             createdAt: number;
             updatedAt: number;
             dataSource?: components["schemas"]["DataSource"];
@@ -2345,10 +2342,6 @@ export interface components {
             syncMode?: "manual" | "on_view" | "webhook";
             priority?: number;
             optionsJson?: string;
-            /** @enum {string} */
-            nodeContribution?: "scoop" | "anchor";
-            /** @enum {string} */
-            linkContribution?: "add" | "update";
         } | {
             /** @enum {string} */
             type: "manual";
@@ -2363,10 +2356,6 @@ export interface components {
             syncMode?: "manual" | "on_view" | "webhook";
             priority?: number;
             optionsJson?: string;
-            /** @enum {string} */
-            nodeContribution?: "scoop" | "anchor";
-            /** @enum {string} */
-            linkContribution?: "add" | "update";
         };
         TopologySourceSuccess: {
             /** @enum {boolean} */
@@ -6989,10 +6978,6 @@ export interface operations {
                         syncMode?: "manual" | "on_view" | "webhook";
                         priority?: number;
                         optionsJson?: string;
-                        /** @enum {string} */
-                        nodeContribution?: "scoop" | "anchor";
-                        /** @enum {string} */
-                        linkContribution?: "add" | "update";
                     }[];
                 };
             };

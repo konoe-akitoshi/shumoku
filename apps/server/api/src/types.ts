@@ -173,10 +173,6 @@ export interface TopologyDataSource {
   lastSyncedAt?: number
   priority: number
   optionsJson?: string
-  /** How this source's nodes participate. Default 'scoop'. */
-  nodeContribution: NodeContribution
-  /** How this source's links participate. Default 'add'. */
-  linkContribution: LinkContribution
   createdAt: number
   updatedAt: number
   // Joined data
@@ -189,8 +185,6 @@ export interface TopologyDataSourceInput {
   syncMode?: SyncMode
   priority?: number
   optionsJson?: string
-  nodeContribution?: NodeContribution
-  linkContribution?: LinkContribution
 }
 
 export interface Dashboard {

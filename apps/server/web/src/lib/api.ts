@@ -16,9 +16,7 @@ import type {
   DashboardInput,
   DataSource,
   DataSourceInput,
-  LinkContribution,
   MetricsMapping,
-  NodeContribution,
   ResolvedRecordView,
   ScopeFilter,
   ScopeMode,
@@ -581,6 +579,8 @@ export const topologies = {
       scopeSourceId?: string
       scope: ScopeFilter
       compositionMode: CompositionMode
+      /** The sources Auto takes as the boundary, as the server bakes it. */
+      autoScopeSourceIds: string[]
     }> => {
       const { data, error, response } = await contractClient.GET('/topologies/{id}/composition', {
         params: { path: { id } },
@@ -602,6 +602,7 @@ export const topologies = {
       scopeSourceId?: string
       scope: ScopeFilter
       compositionMode: CompositionMode
+      autoScopeSourceIds: string[]
     }> => {
       const { data, error, response } = await contractClient.PUT('/topologies/{id}/composition', {
         params: { path: { id } },
@@ -642,8 +643,6 @@ export const topologies = {
         syncMode?: SyncMode
         priority?: number
         optionsJson?: string
-        nodeContribution?: NodeContribution
-        linkContribution?: LinkContribution
       },
     ): Promise<TopologyDataSource> => {
       const { data, error, response } = await contractClient.PUT(
