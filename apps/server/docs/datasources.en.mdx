@@ -131,13 +131,12 @@ Create the third-party account under **System > User Management** on NCE-Campus 
 
 ## Network Scan
 
-Actively discover topology with no upstream inventory: seed-crawls the network over SNMP and LLDP, identifying devices, walking ports, and harvesting neighbor links.
+Find **which devices are on the network** with no upstream inventory. It checks whether each address is reachable and, for devices on the same segment, takes the MAC from the ARP cache. It uses no credential and does not read a device's contents (ports, model, LLDP neighbors): register a credential on the topology's **Devices** screen and press **Read** for that.
 
 | Field | Description |
 |-------|-------------|
-| Targets | IPv4 addresses, hostnames, or CIDR blocks (e.g. `10.0.0.0/24`) |
-| Community | SNMPv2c community (default `public`) |
-| Timeout | Per-device timeout in milliseconds |
+| Targets | IPv4 addresses, hostnames, or CIDR blocks (e.g. `10.0.0.0/24`). A CIDR is expanded and swept for reachability |
+| Include client devices | Keep hosts with a randomised MAC (phones, laptops). Off by default, which keeps the sweep to infrastructure |
 
 ## Plugins
 

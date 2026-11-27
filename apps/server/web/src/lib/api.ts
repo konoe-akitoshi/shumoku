@@ -16,9 +16,7 @@ import type {
   DashboardInput,
   DataSource,
   DataSourceInput,
-  LinkContribution,
   MetricsMapping,
-  NodeContribution,
   ResolvedRecordView,
   ScopeFilter,
   ScopeMode,
@@ -642,8 +640,6 @@ export const topologies = {
         syncMode?: SyncMode
         priority?: number
         optionsJson?: string
-        nodeContribution?: NodeContribution
-        linkContribution?: LinkContribution
       },
     ): Promise<TopologyDataSource> => {
       const { data, error, response } = await contractClient.PUT(

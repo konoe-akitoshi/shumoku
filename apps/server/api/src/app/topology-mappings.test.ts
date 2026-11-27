@@ -11,8 +11,6 @@ function source(dataSourceId: string, priority: number): TopologyDataSource {
     purpose: 'metrics',
     syncMode: 'manual',
     priority,
-    nodeContribution: 'scoop',
-    linkContribution: 'add',
     createdAt: 1,
     updatedAt: 1,
   }

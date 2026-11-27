@@ -2,15 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /**
- * Composition — service round-trips:
- *  - Per-source modes (topology-source-modes.md, Axis D): defaults are Additive
- *    (scoop / add); roles persist. Scope is NOT per-source anymore.
- *  - Topology-level scope (020): scopeMode persists; scopeSourceId only sticks
- *    for 'closed'.
+ * Composition — service round-trips. Scope (020) and the merge method (022) are
+ * topology-level: scopeMode persists, scopeSourceId only sticks for 'closed', and
+ * compositionMode persists. Nothing about either is per source.
  */
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { TopologyService } from '../../src/services/topology.ts'
-import { TopologySourcesService } from '../../src/services/topology-sources.ts'
 import { getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
 
 let db_: TempDb
@@ -24,34 +21,6 @@ function makeTopology(id: string): void {
     .query('INSERT INTO topologies (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)')
     .run(id, id)
 }
-
-test('add() defaults to Additive (scoop / add)', async () => {
-  makeTopology('t_modes_1')
-  const ds = insertDataSource('zabbix')
-  const svc = new TopologySourcesService()
-  const added = await svc.add('t_modes_1', { dataSourceId: ds, purpose: 'topology' })
-  expect(added.nodeContribution).toBe('scoop')
-  expect(added.linkContribution).toBe('add')
-
-  const got = svc.get(added.id)
-  expect(got?.nodeContribution).toBe('scoop')
-  expect(got?.linkContribution).toBe('add')
-})
-
-test('update() sets per-source role (Enrichment)', async () => {
-  makeTopology('t_modes_2')
-  const ds = insertDataSource('netbox')
-  const svc = new TopologySourcesService()
-  const added = await svc.add('t_modes_2', { dataSourceId: ds, purpose: 'topology' })
-
-  const enriched = svc.update(added.id, { nodeContribution: 'anchor', linkContribution: 'update' })
-  expect(enriched?.nodeContribution).toBe('anchor')
-  expect(enriched?.linkContribution).toBe('update')
-
-  const additive = svc.update(added.id, { nodeContribution: 'scoop', linkContribution: 'add' })
-  expect(additive?.nodeContribution).toBe('scoop')
-  expect(additive?.linkContribution).toBe('add')
-})
 
 test('topology scope defaults to auto, and setScope round-trips', () => {
   makeTopology('t_scope_1')

@@ -63,8 +63,8 @@ function ensureDeepReadAttachment(topologyId: string): void {
   if (!exists) {
     db.query(
       `INSERT INTO topology_data_sources
-         (id, topology_id, data_source_id, purpose, priority, node_contribution, link_contribution, created_at, updated_at)
-       VALUES (?, ?, ?, 'topology', ?, 'scoop', 'add', ?, ?)`,
+         (id, topology_id, data_source_id, purpose, priority, created_at, updated_at)
+       VALUES (?, ?, ?, 'topology', ?, ?, ?)`,
     ).run(attachId, topologyId, DEEP_READ_SOURCE_ID, DEEP_READ_PRIORITY, now, now)
   }
 }

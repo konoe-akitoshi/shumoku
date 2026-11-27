@@ -245,7 +245,8 @@
   //   Additive   = every source adds nodes + links (union)
   //   Enrichment = sources only enrich existing nodes/links, assert nothing new
   // Boundary = whose regions close the world (Topology.scopeMode).
-  //   Auto   = the highest-priority topology source's regions are the boundary
+  //   Auto   = the regions of the highest-priority topology source that has regions are the
+  //            boundary (a source with none, such as the device read, draws no boundary)
   //   Closed = one named source's regions are, whatever the priorities say
   //   Open   = no source closes it; every source's findings survive the merge
   // Separate from the Scope filters below, which decide what a source ingests.
@@ -785,8 +786,8 @@
             {:else if (ctx.topology?.scopeMode ?? 'auto') === 'closed'}
               only devices inside that source’s regions are kept, whatever the priorities
             {:else}
-              the top-priority source’s regions define the boundary; devices outside them are
-              dropped
+              the regions of the top-priority source that has regions define the boundary;
+              devices outside them are dropped
             {/if}
           </span>
         </div>
