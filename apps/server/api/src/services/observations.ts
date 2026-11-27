@@ -87,6 +87,11 @@ export interface RecordObservationInput {
   statusMessage?: string
   /** What the source observed, as it sent it. Validated before it may replace canonical state. */
   source: unknown
+  /**
+   * Store it again even when it is what is stored already (a Rebuild): the contribution's rows
+   * are rewritten and `contributionChanged` is true, so the drawing is made again.
+   */
+  force?: boolean
 }
 
 interface ObservationRow {
@@ -283,7 +288,12 @@ export class ObservationsService {
     // No-change gate: identical structural content → only refresh the
     // freshness columns; the decomposed rows are already correct, and the
     // caller can skip the revision bump (no re-resolve, no re-layout).
-    if (existing && existing.content_hash != null && existing.content_hash === contentHash) {
+    if (
+      !input.force &&
+      existing &&
+      existing.content_hash != null &&
+      existing.content_hash === contentHash
+    ) {
       this.db
         .query(
           'UPDATE contribution_source SET last_status = ?, last_ok_at = ? WHERE topology_id = ? AND source_id = ?',

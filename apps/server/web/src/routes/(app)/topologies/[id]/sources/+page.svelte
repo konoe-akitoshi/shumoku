@@ -598,27 +598,21 @@
     return Math.min(100, Math.round(((settled + running) / total) * 100))
   })
 
-  /** Rebuild = blank, then re-sync. Delete every re-fetchable source's observed
-   *  data and the cached layout, then run a normal Sync all. On the blank slate
-   *  every fetch is entirely "new", so the no-change gate passes naturally and
-   *  the layout re-derives — no force needed. Reuses the sync job + progress
-   *  modal. (Hand-edited Manual sources, device reads and the curation overlay
-   *  are kept — none can be re-fetched from an upstream.) */
+  /** Rebuild = re-fetch every re-fetchable source and draw again, even if nothing changed.
+   *  Nothing is deleted first: a source whose fetch fails keeps what it had. Reuses the
+   *  sync job + progress modal. (Hand-edited Manual sources, device reads and the curation
+   *  overlay are not re-fetched — none has an upstream.) */
   async function handleRebuild() {
     const ok = confirm(
-      'Rebuild blanks this topology — deletes the observed data of every ' +
-        're-fetchable source and the cached layout — then re-syncs from scratch ' +
-        'and re-derives the diagram. Hand-edited Manual data and device reads (SNMP) are kept. ' +
-        'This cannot be undone. Continue?',
+      'Rebuild re-fetches every re-fetchable source and re-derives the diagram, even if ' +
+        'nothing changed. A source that fails to fetch keeps its last data. Hand-edited ' +
+        'Manual data and device reads (SNMP) are kept as they are. Continue?',
     )
     if (!ok) return
     localError = ''
     try {
       const res = await api.topologies.sources.rebuild(ctx.topologyId)
       attachSyncJob(res.job)
-      // Blanked server-side already — show the empty diagram while the re-sync
-      // repopulates it (the visible "white-out → rebuild").
-      ctx.bumpRevision()
     } catch (e) {
       // 409 = a job is already running — attach to it instead of failing.
       const status = (e as { status?: number }).status

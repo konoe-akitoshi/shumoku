@@ -97,12 +97,16 @@ export function cancelSyncJob(topologyId: string): SyncJob | null {
  * throws nothing — per-source failures land in the step states. No-op
  * (returns the running job) when one is already in flight. `pullable` comes
  * from `resolvePullableSourceIds`.
+ *
+ * `rebuild` stores every fetched source again and draws again even when nothing changed. It
+ * deletes nothing first: a source whose fetch fails keeps what it had, as in any sync.
  */
 export function startSyncJob(
   topologyId: string,
   sources: TopologyDataSource[],
   pullable: ReadonlySet<string>,
   deps: SyncJobDeps,
+  options: { rebuild?: boolean } = {},
 ): SyncJob | null {
   const existing = jobs.get(topologyId)
   if (existing && existing.state === 'running') return existing
@@ -129,7 +133,7 @@ export function startSyncJob(
     cancelRequested: false,
   }
   jobs.set(topologyId, job)
-  void runSyncJob(job, pull, deps)
+  void runSyncJob(job, pull, deps, options.rebuild === true)
   return job
 }
 
@@ -137,6 +141,7 @@ async function runSyncJob(
   job: SyncJob,
   sources: TopologyDataSource[],
   deps: SyncJobDeps,
+  rebuild: boolean,
 ): Promise<void> {
   const { topologyId } = job
   let anyChanged = false
@@ -188,6 +193,7 @@ async function runSyncJob(
           status,
           statusMessage,
           source: observed,
+          force: rebuild,
         })
         if (recorded.contributionChanged) anyChanged = true
         deps.observationsService.updateHysteresis(
@@ -235,7 +241,7 @@ async function runSyncJob(
   // No-change gate: every source re-scanned to the same structural content →
   // the diagram cannot have changed, so skip the invalidation AND the
   // multi-minute layout re-bake entirely.
-  if (!anyChanged) {
+  if (!anyChanged && !(rebuild && fetchesOk())) {
     skipBake('No changes since last sync')
     finish(job, fetchesOk() ? 'done' : 'failed')
     return
