@@ -408,6 +408,14 @@ interface ClusterMember extends NodeView {
   entityId?: string
   /** Registry entity ids for this contribution's ports, by `${nodeId}:${portName}`. */
   portEntities?: Record<string, string>
+  /**
+   * The project's registry entity for its node, and its ports'. Only names the merged node when
+   * no source's entity does; it never clusters. The registry can keep the project's node on an
+   * entity the device has since left (a chassis swap mints a new one), and clustering by it
+   * would split the project's node from the device it describes.
+   */
+  namingEntityId?: string
+  namingPortEntities?: Record<string, string>
 }
 
 interface NodeCluster {
@@ -508,14 +516,14 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   for (const c of contributions) {
     if (c.sourceId !== INTRINSIC) continue
     for (const node of c.network.nodes) {
-      const entityId = c.entities?.nodes[node.id]
+      const namingEntityId = c.entities?.nodes[node.id]
       claim({
         sourceId: c.sourceId,
         priority: c.priority,
         capturedAt: c.capturedAt,
         ...viewOf(c, node),
-        ...(entityId && { entityId }),
-        ...(c.entities && { portEntities: c.entities.ports }),
+        ...(namingEntityId && { namingEntityId }),
+        ...(c.entities && { namingPortEntities: c.entities.ports }),
       })
     }
   }
@@ -714,9 +722,11 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
   if (ports.config.length > 0) config.ports = ports.config
 
   // The registry entity the cluster is: members carrying an entity id are clustered by it, so
-  // they name one. Carried out so whoever keys on entities reads the merge's answer instead of
-  // looking the node up again.
-  const entityId = cluster.members.find((m) => m.entityId)?.entityId
+  // they name one; the project's entity names it only when no source's does. Carried out so
+  // whoever keys on entities reads the merge's answer instead of looking the node up again.
+  const entityId =
+    cluster.members.find((m) => m.entityId)?.entityId ??
+    cluster.members.find((m) => m.namingEntityId)?.namingEntityId
 
   const observation: NodeObservationEntry = {
     ...(entityId && { entityId: asEntityId(entityId) }),
@@ -831,6 +841,8 @@ interface PortMember {
   written?: input.Port
   observed?: PortObservation
   entityId?: string
+  /** The project's entity for the port: names the merged port only, never clusters it. */
+  namingEntityId?: string
 }
 
 interface FoldedPorts {
@@ -848,6 +860,7 @@ function memberPorts(m: ClusterMember): PortMember[] {
     const port = written.get(name)
     const observed = m.observed?.ports?.[name]
     const entityId = m.portEntities?.[portKey(m.node.id, name)] ?? observed?.entityId
+    const namingEntityId = m.namingPortEntities?.[portKey(m.node.id, name)]
     return {
       sourceId: m.sourceId,
       nodeId: m.node.id,
@@ -857,6 +870,7 @@ function memberPorts(m: ClusterMember): PortMember[] {
       ...(port && { written: port }),
       ...(observed && { observed }),
       ...(entityId && { entityId }),
+      ...(namingEntityId && { namingEntityId }),
     }
   })
 }
@@ -953,8 +967,11 @@ function foldPortCluster(members: PortMember[]): {
     suppressed,
   )
   const ifIndex = pickField(ranked, (m) => m.observed?.ifIndex)
-  // the port entity, as the node's: ports carrying one are clustered by it
-  const entityId = members.find((m) => m.entityId)?.entityId
+  // the port entity, as the node's: ports carrying one are clustered by it; the project's names
+  // it only when no source's does
+  const entityId =
+    members.find((m) => m.entityId)?.entityId ??
+    members.find((m) => m.namingEntityId)?.namingEntityId
   const observation: PortObservation = {
     ...(entityId && { entityId: asEntityId(entityId) }),
     ...(ifIndex && { ifIndex: ifIndex.value }),
