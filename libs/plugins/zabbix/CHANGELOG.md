@@ -1,5 +1,49 @@
 # shumoku-plugin-zabbix
 
+## 0.3.2
+
+### Patch Changes
+
+- d5f9beb: Device attributes are configuration. A node's `address`, `sysName`, `chassisId` and `mac` and a
+  port's `mac` are fields of the network YAML (`inputModel.Node` / `Port`); `resolveNetwork` matches
+  nodes on them (and on a node's segment addresses) plus each source's own `vendorIds`, which stay in
+  the source's observation with a port's `ifIndex`. The `identity` field is gone from the observation
+  record, and the drawn graph (`Node`, `NodePort`, `Link`, `Subgraph`, `NetworkGraph`) carries no
+  `identity`, `provenance`, `entityId`, `attachments`, `metadata` or `exclusions`: `toNetworkGraph(model)`
+  takes no observation and `fromNetworkGraph(graph)` returns a `NetworkModel`. The graph-shaped
+  `resolve()` / `SnapshotEntry` / `ResolvedGraph`, `graphToSource`, `stampObserved` and
+  `deriveMappingFromGraph` are removed; `deriveMapping(graph, observation)`,
+  `effectivePolicyForNode(graph, observation, node)`, `nodeIdentityKeys(DeviceKeys)`,
+  `portIdentityKeys(PortKeys)`, `deviceKeysOfIdentity`, `segmentAddressesOf`, `deviceAttributes` and
+  `vendorIdsOf` replace them. `validateTopologyIdentityContract` reports `portsMissingName` instead of
+  `portsMissingIfName`. Topology plugins write the attributes on the nodes and ports they return.
+- fea9b1c: `NetworkModel` is now two things: `config` (the network in the YAML's shape) and `drawing` (looks and order). The design layer is gone: a node's ports (`ports[]`, each with `name`, `label`, `interfaceName`, `aliases`, `role`, `faceplateLabel`, `speed`, `connectors`, `poe`, `source`, `notes`), its `productId`, `platform`, `service` and `resource`, a link end's `plug` (cage and module), a link's `cable` (`type` and `productId`, or the type written bare) and `via`, and the network's `terminations` are configuration, written in the YAML and merged like every other field. The observation record (identity, provenance, attachments, exclusions) is no longer part of the model: `resolveNetwork(project: SourceNetwork, snapshots)` returns `{ model, observation }`, `toNetworkGraph(model, observation?)` joins it into the graph when given, `fromNetworkGraph(graph)` returns `{ model, observation? }`, and `graphToSource(graph)` is the inverse of `sourceToGraph`. `SourceNetwork` lost its `design` layer: a plugin writes a node's ports on the node. Coordinates never ride in the network: node `position` / `size`, group `bounds`, link `bends`, `Termination.position` and port `placement` are removed from the graph types, as are `fieldSources`, group `membership` and `direction`, and a port's `disabled`. `Termination.metadata` became `autoFor`.
+- e0f3f23: Remove the `pollInterval` config field: nothing ever read it. How often the Server reads a data source is now set on the Server's Settings page (and can be overridden per data source).
+- 6e8b33f: A traffic item keyed by an SNMP counter and an interface index (`net.if.in[ifHCInOctets.10]`, as Zabbix's own SNMP interface templates key them) now belongs to the interface its name says (`Interface Ethernet10(…): Bits received`), not to an interface called `ifHCInOctets.10`, so links on those ports can be mapped.
+- f6ec1c4: Alerts: return every problem still open, however long ago it started. The last hour's window now limits only the resolved ones, so an alert no longer drops out (and its topology highlight with it) an hour after it starts.
+- 7ddd571: Leave `identity.sysName` unset unless `inventory.name` supplies it. The plugin used to fall back to `host.name`, an operator display string, which made a host read by both Zabbix and SNMP fail to merge when the two names differed.
+- Updated dependencies [e0f3f23]
+- Updated dependencies [2d11fb6]
+- Updated dependencies [570c86e]
+- Updated dependencies [60d6f2f]
+- Updated dependencies [d5f9beb]
+- Updated dependencies [64a17e6]
+- Updated dependencies [21975fc]
+- Updated dependencies [eafc704]
+- Updated dependencies [2399f57]
+- Updated dependencies [6a60133]
+- Updated dependencies [67b9c38]
+- Updated dependencies [eb1f58e]
+- Updated dependencies [b262fe4]
+- Updated dependencies [fea9b1c]
+- Updated dependencies [0cdb65b]
+- Updated dependencies [bcefedd]
+- Updated dependencies [317dd26]
+- Updated dependencies [e5d6270]
+- Updated dependencies [475ba09]
+- Updated dependencies [65cfb65]
+  - @shumoku/core@0.7.0
+
 ## 0.3.1
 
 ### Patch Changes

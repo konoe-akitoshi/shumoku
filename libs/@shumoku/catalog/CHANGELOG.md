@@ -1,5 +1,31 @@
 # @shumoku/catalog
 
+## 0.1.8
+
+### Patch Changes
+
+- Updated dependencies [e0f3f23]
+- Updated dependencies [2d11fb6]
+- Updated dependencies [570c86e]
+- Updated dependencies [60d6f2f]
+- Updated dependencies [d5f9beb]
+- Updated dependencies [64a17e6]
+- Updated dependencies [21975fc]
+- Updated dependencies [eafc704]
+- Updated dependencies [2399f57]
+- Updated dependencies [6a60133]
+- Updated dependencies [67b9c38]
+- Updated dependencies [eb1f58e]
+- Updated dependencies [b262fe4]
+- Updated dependencies [fea9b1c]
+- Updated dependencies [0cdb65b]
+- Updated dependencies [bcefedd]
+- Updated dependencies [317dd26]
+- Updated dependencies [e5d6270]
+- Updated dependencies [475ba09]
+- Updated dependencies [65cfb65]
+  - @shumoku/core@0.7.0
+
 ## 0.1.7
 
 ### Patch Changes
