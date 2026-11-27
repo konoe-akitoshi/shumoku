@@ -146,3 +146,55 @@ test('clustering follows source priority, not the order the snapshots are listed
   expect(listedLowFirst.map((n) => n.label).sort()).toEqual(['h1', 'h2'])
   expect(listedHighFirst.map((n) => n.label).sort()).toEqual(['h1', 'h2'])
 })
+
+test('the registry entity each merged node and port is carries out of the merge', () => {
+  // two sources whose nodes share nothing but their entity: the registry said they are one
+  const source = (id: string, nodeId: string, address: string, port: string) => ({
+    sourceId: id,
+    capturedAt: 1,
+    status: 'ok' as const,
+    source: {
+      network: { nodes: [{ id: nodeId, address, ports: [{ name: port }] }], links: [] },
+    },
+    entities: { nodes: { [nodeId]: 'E-sw' }, ports: { [`${nodeId}:${port}`]: 'E-port' } },
+  })
+  const { model, observation } = resolveNetwork({ network: { nodes: [], links: [] } }, [
+    source('inventory', 'sw-a', '10.0.0.1', 'Ethernet1'),
+    source('controller', 'sw-b', '10.0.0.2', 'Ethernet1'),
+  ])
+  expect(model.config.nodes).toHaveLength(1)
+  const id = model.config.nodes[0]?.id ?? ''
+  expect(observation.nodes?.[id]?.entityId).toBe('E-sw')
+  expect(observation.nodes?.[id]?.ports?.['Ethernet1']?.entityId).toBe('E-port')
+})
+
+test("the project's entity names a node it alone knows, and never splits it from its device", () => {
+  // the project wrote `core` at an address and the registry kept it on E1; the device there has
+  // since been swapped and registered as E2
+  const project = {
+    network: { nodes: [{ id: 'core', address: '10.9.9.1' }, { id: 'lone' }], links: [] },
+  }
+  const projectEntities = { nodes: { core: 'E1', lone: 'E-lone' }, ports: {} }
+  const { model, observation } = resolveNetwork(
+    project,
+    [
+      {
+        sourceId: 'scan',
+        capturedAt: 1,
+        status: 'ok',
+        source: {
+          network: {
+            nodes: [{ id: 'dev', address: '10.9.9.1', chassisId: 'c2:00:00:00:00:02' }],
+            links: [],
+          },
+        },
+        entities: { nodes: { dev: 'E2' }, ports: {} },
+      },
+    ],
+    { projectEntities },
+  )
+  // one node for the device, named by the source's entity
+  expect(model.config.nodes.map((n) => n.id).sort()).toEqual(['core', 'lone'])
+  expect(observation.nodes?.['core']?.entityId).toBe('E2')
+  expect(observation.nodes?.['lone']?.entityId).toBe('E-lone')
+})

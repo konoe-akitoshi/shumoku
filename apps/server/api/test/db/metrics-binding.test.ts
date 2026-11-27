@@ -145,14 +145,14 @@ describe('link bindings to identity-less ports (issue #548)', () => {
     expect(m?.links?.[linkKey]?.bandwidth).toBe(1000)
   })
 
-  test('updateMapping reports link bindings it cannot anchor (skipped is honest)', async () => {
-    // Node 'a' has no node identity, so even a stamped port can't anchor the
-    // binding — it must be counted, not silently dropped.
+  test('a link binding on a node written with no attributes anchors on its entity', async () => {
+    // Node 'a' has no attribute it is recognized by, but it is registered, and the merge carries
+    // its entity out: the binding anchors instead of being counted as skipped.
     const { topoId, nodeAId, linkKey } = await netboxishFixture('mb-skip', undefined)
     const { skipped } = await svc.updateMapping(topoId, {
       nodes: {},
       links: { [linkKey]: { monitoredNodeId: nodeAId, interface: 'ge-0/0/1' } },
     })
-    expect(skipped.links).toBe(1)
+    expect(skipped.links).toBe(0)
   })
 })

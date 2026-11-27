@@ -11,7 +11,7 @@ import type { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { EntityId, Identity, SourceNetwork } from '@shumoku/core'
+import type { EntityId, Identity, ObservationLayer, SourceNetwork } from '@shumoku/core'
 import { asEntityId, sourceToGraph } from '@shumoku/core'
 import {
   observedGraphToSource as graphToSource,
@@ -20,11 +20,7 @@ import {
   type ObservedPort,
 } from '../../src/db/legacy/observed-graph.ts'
 import { stampEntityIds } from '../../src/services/entity-registry.ts'
-import {
-  deviceAttributesOf,
-  type ResolvedEntities,
-  type ResolvedRecord,
-} from '../../src/services/resolved-record.ts'
+import type { ResolvedEntities, ResolvedRecord } from '../../src/services/resolved-record.ts'
 import type { ParsedTopology } from '../../src/services/topology.ts'
 
 export type { NetworkGraph as ObservedGraph }
@@ -233,14 +229,46 @@ export function entitiesOf(graph: NetworkGraph): ResolvedEntities {
   return entities
 }
 
-/** Looks a graph of the old shape up in the registry and returns it with entity ids stamped. */
+/**
+ * A graph of the old shape, as an ingested source wrote it, with entity ids stamped as a bake
+ * stamps them: each node and port is the entity the registry gave the source's element (the
+ * merge carries that out of `resolveNetwork`; here the graph is one source as it was ingested),
+ * and a link is the entity of its two ends.
+ */
 export function stampGraph(topologyId: string, graph: NetworkGraph, db: Database): NetworkGraph {
   const source = graphToSource(graph)
-  const record: Pick<ResolvedRecord, 'observation' | 'attributes'> = {
-    observation: source.observation ?? {},
-    attributes: deviceAttributesOf({ config: source.network }),
+  const rows = db
+    .query<{ kind: string; local_id: string; entity_id: string }, [string]>(
+      'SELECT kind, local_id, entity_id FROM entity_element WHERE topology_id = ?',
+    )
+    .all(topologyId)
+  const entityOf = (kind: string, localId: string) =>
+    rows.find((r) => r.kind === kind && r.local_id === localId)?.entity_id
+  // the graph a bake stamps: its ports include those only a link's end names
+  const drawn = sourceToGraph(source)
+  const nodes: NonNullable<ObservationLayer['nodes']> = {}
+  for (const node of drawn.nodes) {
+    const observed = source.observation?.nodes?.[node.id]
+    const entityId = entityOf('node', node.id)
+    const ports = Object.fromEntries(
+      (node.ports ?? []).map((p) => {
+        const portEntity = entityOf('port', `${node.id}:${p.id}`)
+        return [
+          p.id,
+          { ...observed?.ports?.[p.id], ...(portEntity && { entityId: asEntityId(portEntity) }) },
+        ]
+      }),
+    )
+    nodes[node.id] = {
+      ...observed,
+      ...(entityId && { entityId: asEntityId(entityId) }),
+      ...(Object.keys(ports).length > 0 && { ports }),
+    }
   }
-  const entities = stampEntityIds(topologyId, sourceToGraph(source), record, db)
+  const record: Pick<ResolvedRecord, 'observation'> = {
+    observation: { ...source.observation, nodes },
+  }
+  const entities = stampEntityIds(topologyId, drawn, record, db)
   return withEntities(graphOf(source), entities)
 }
 
