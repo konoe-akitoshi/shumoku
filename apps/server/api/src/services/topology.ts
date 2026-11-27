@@ -222,6 +222,7 @@ interface StoredLinkMapping {
 // own), ports stand about the middle of their edge.
 // 42: a switch stands centred over its access points (a fan head's uplink pulls weakly, and a
 // box is held straight to the middle of what it hands over to, not the first).
+// 43: two lines between the same two boxes stand in one order at both ends, so they do not cross.
 /**
  * Bumped whenever registration would give stored contributions entities they lack, so the startup
  * backfill registers them again (adopt-or-mint is idempotent). 2: a line whose end names no port is
@@ -230,7 +231,7 @@ interface StoredLinkMapping {
  */
 const REGISTRY_BACKFILL_VERSION = '2'
 
-const RESOLVER_VERSION = 42
+const RESOLVER_VERSION = 43
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

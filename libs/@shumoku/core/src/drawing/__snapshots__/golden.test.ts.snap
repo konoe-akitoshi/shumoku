@@ -369,7 +369,7 @@ exports[`the drawing of fixed networks > fixtures/rate-contracted.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "31d4b1901f4514c5",
+  "hash": "02cf612f773a582d",
   "nodes": 3,
   "wires": 3,
 }

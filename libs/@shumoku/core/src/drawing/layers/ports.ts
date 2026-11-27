@@ -25,13 +25,20 @@ export function portGroupsOf(
       side,
       ids,
       partners: ids.map((id) => wires.portInfo.get(id)?.partners ?? []),
+      lineOrder: ids.map((id) => wires.portInfo.get(id)?.lineOrder ?? 0),
     })
   const groupsAt: PortGroup[][] = Array.from({ length: basis.ranks.max + 1 }, () => [])
   for (const g of portGroups) groupsAt[basis.rankOf(basis.ownerOf.get(g.box) ?? g.box)]?.push(g)
   return { portGroups, groupsAt }
 }
 
-/** The ports of a side in the order of the places their lines lead to. */
+/**
+ * The ports of a side in the order of the places their lines lead to. Ports whose lines lead to
+ * one place (two lines between the same two boxes) stand in the order of their lines in the
+ * input, which both ends of a line share: ordered by their own names instead, the two ends could
+ * disagree (`Ethernet12` before `Ethernet2` above, `Ethernet1` before `eth0` below) and the lines
+ * crossed between them.
+ */
 export const portsOf = (
   g: PortGroup,
   at: (k: string) => number | undefined,
@@ -42,8 +49,8 @@ export const portsOf = (
     return median(ps.map((k) => at(k) ?? 0))
   })
   return g.ids
-    .map((id, i) => ({ id, at: where[i] ?? 0, i }))
-    .sort((p, q) => p.at - q.at || p.i - q.i)
+    .map((id, i) => ({ id, at: where[i] ?? 0, line: g.lineOrder[i] ?? 0, i }))
+    .sort((p, q) => p.at - q.at || p.line - q.line || p.i - q.i)
     .map((e) => e.id)
 }
 
