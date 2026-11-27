@@ -2664,12 +2664,19 @@
               "additive",
               "enrichment"
             ]
+          },
+          "autoScopeSourceIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "scopeMode",
           "scope",
-          "compositionMode"
+          "compositionMode",
+          "autoScopeSourceIds"
         ]
       },
       "TopologyDataSource": {

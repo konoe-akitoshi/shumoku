@@ -159,6 +159,7 @@ export const TopologyCompositionSchema = z
     scopeSourceId: z.string().optional(),
     scope: ScopeFilterSchema,
     compositionMode: z.enum(['additive', 'enrichment']),
+    autoScopeSourceIds: z.array(z.string()),
   })
   .openapi('TopologyComposition')
 export const UpdateTopologyCompositionSchema = z.object({

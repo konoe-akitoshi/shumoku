@@ -277,10 +277,25 @@
       })
   }
 
-  /** The source Auto would choose: highest priority among topology sources. */
-  let autoScopeSourceId = $derived(
-    [...topologySources].sort((a, b) => b.priority - a.priority)[0]?.dataSourceId,
-  )
+  /**
+   * The source Auto would choose, as the server bakes it: the highest-priority source that holds
+   * regions. Only the server knows which sources hold regions, so it is asked, again whenever
+   * the attached sources change.
+   */
+  let autoScopeSourceIds = $state<string[]>([])
+  $effect(() => {
+    const topologyId = ctx.topologyId
+    void ctx.currentSources
+    api.topologies.composition
+      .get(topologyId)
+      .then((res) => {
+        autoScopeSourceIds = res.autoScopeSourceIds
+      })
+      .catch(() => {
+        autoScopeSourceIds = []
+      })
+  })
+  let autoScopeSourceId = $derived(autoScopeSourceIds[0])
 
   function setCompositionMode(mode: CompositionMode) {
     if (ctx.topology) ctx.topology = { ...ctx.topology, compositionMode: mode }

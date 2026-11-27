@@ -1598,21 +1598,10 @@ export class TopologyService {
     // resolve() is pure mechanism: it honors `scope:'closed'` marks; we stamp them
     // here per the topology's policy, on both the scope source(s) and the overlay
     // (operator-curated regions also scope, unless the topology is 'open').
-    const withRegions = new Set(
-      (
-        this.db
-          .query(
-            `SELECT DISTINCT source_id FROM contribution_element
-              WHERE topology_id = ? AND kind = 'subgraph'`,
-          )
-          .all(topology.id) as { source_id: string }[]
-      ).map((r) => r.source_id),
-    )
-    const scopeSourceIds = computeScopeSources(
+    const scopeSourceIds = this.scopeSources(
+      topology.id,
       topology.scopeMode,
       topology.scopeSourceId,
-      topologySources,
-      (sourceId) => withRegions.has(sourceId),
     )
     const scoped =
       topology.scopeMode !== 'open' && (overlay.network.groups?.length ?? 0) > 0
@@ -1673,6 +1662,40 @@ export class TopologyService {
    *     attached sources appear (the `priorityBySource` guard is a belt-and-braces
    *     filter on top of that).
    */
+  /** The sources the 'auto' scope takes as the boundary: what a bake uses, for the UI to show. */
+  autoScopeSourceIds(topologyId: string): string[] {
+    return [...this.scopeSources(topologyId, 'auto', undefined)]
+  }
+
+  /**
+   * The sources whose regions close the world under a scope policy. Which sources hold regions
+   * is read from their stored contributions, so legacy observations are brought into the store
+   * first (the bake's snapshot read would do it only afterwards).
+   */
+  private scopeSources(
+    topologyId: string,
+    scopeMode: ScopeMode,
+    scopeSourceId: string | undefined,
+  ): Set<string> {
+    this.backfillObservedContributions(topologyId)
+    const withRegions = new Set(
+      (
+        this.db
+          .query(
+            `SELECT DISTINCT source_id FROM contribution_element
+              WHERE topology_id = ? AND kind = 'subgraph'`,
+          )
+          .all(topologyId) as { source_id: string }[]
+      ).map((r) => r.source_id),
+    )
+    return computeScopeSources(
+      scopeMode,
+      scopeSourceId,
+      this.topologySources.listByTopology(topologyId),
+      (sourceId) => withRegions.has(sourceId),
+    )
+  }
+
   private readObservedSnapshots(
     topologyId: string,
     priorityBySource: Map<string, number>,

@@ -7,6 +7,8 @@
  * compositionMode persists. Nothing about either is per source.
  */
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import type { SourceNetwork } from '@shumoku/core'
+import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import { getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
 
@@ -69,4 +71,35 @@ test('topology scope criteria round-trip (setScopeCriteria / readScopeCriteria)'
   // Replace wholesale: empty clears.
   const cleared = svc.setScopeCriteria('t_scope_2', { include: [], exclude: [] })
   expect(cleared?.scope).toEqual({ include: [], exclude: [] })
+})
+
+test('auto takes the highest-priority source that holds regions as the boundary', async () => {
+  makeTopology('t_auto_regions')
+  const db = getDatabase()
+  const withRegions = insertDataSource('netbox', 'ds_auto_regions')
+  const regionless = insertDataSource('deep-read-like', 'ds_auto_regionless')
+  const attach = (sourceId: string, priority: number) =>
+    db
+      .query(
+        `INSERT INTO topology_data_sources (id, topology_id, data_source_id, purpose, sync_mode, priority, created_at, updated_at)
+         VALUES (?, 't_auto_regions', ?, 'topology', 'manual', ?, 0, 0)`,
+      )
+      .run(`tds_auto_${sourceId}`, sourceId, priority)
+  attach(withRegions, 1)
+  attach(regionless, 100)
+  const observations = new ObservationsService()
+  const record = (sourceId: string, source: SourceNetwork) =>
+    observations.record({
+      topologyId: 't_auto_regions',
+      sourceId,
+      capturedAt: Date.now(),
+      status: 'ok',
+      source,
+    })
+  await record(withRegions, {
+    network: { nodes: [{ id: 'sw', group: 'site' }], links: [], groups: [{ id: 'site' }] },
+  })
+  await record(regionless, { network: { nodes: [{ id: 'sw', address: '10.0.0.1' }], links: [] } })
+
+  expect(new TopologyService().autoScopeSourceIds('t_auto_regions')).toEqual([withRegions])
 })

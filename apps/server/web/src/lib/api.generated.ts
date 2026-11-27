@@ -2316,6 +2316,7 @@ export interface components {
             };
             /** @enum {string} */
             compositionMode: "additive" | "enrichment";
+            autoScopeSourceIds: string[];
         };
         TopologyDataSource: {
             id: string;
