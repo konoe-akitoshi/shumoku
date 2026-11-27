@@ -1,5 +1,85 @@
 # @shumoku/renderer
 
+## 0.4.0
+
+### Minor Changes
+
+- 1e44236: The camera no longer guesses whether a wheel event comes from a mouse or a touchpad (browsers cannot tell, and on X11 Chrome or legacy Windows touchpads they do not know either): a plain wheel does what `wheelBehavior` says, `pan` (the default, as Figma, tldraw, Visio and draw.io), `zoom`, or `cooperative` (left to the page, for a diagram embedded in a page that scrolls; `onPageWheel` lets the host show a hint). Ctrl/⌘ + wheel and a pinch always zoom; Alt + wheel swaps scroll and zoom. `WheelBehavior` loses `auto`.
+  
+  A pan drag ends when its release is lost (the window loses focus, the capture goes, or a move arrives with the button up), and a pan released off the diagram no longer swallows the next click.
+  
+  The camera takes continuous inputs: `camera.addMotion(sample)` reads a velocity (`{ vx, vy, vz }`, CSS px/s and ln-zoom/s) once a frame while it moves the view, zooming about the pointer.
+  
+  `CameraOptions` loses `scaleExtent`, `panFilter`, `wheelZoomSensitivity` and `pinchZoomSensitivity`, and the camera loses `zoomTo` and `panTo`: nothing used them. The middle button and Alt + left always pan; `setTransform` sets a view.
+- 33aee2f: The camera (`attachCamera`) no longer uses d3-zoom or wheel-gestures. Its view is held in the container's CSS pixels, so:
+  
+  - A trackpad pans one to one with the fingers whatever the diagram's size (it used to run slower on large diagrams and faster on small ones).
+  - Redrawing with new bounds keeps the view on the same place; a fitted view stays fitted.
+  - A mouse wheel notch zooms ×1.2 at the cursor, eased; a pinch zooms at once.
+  - A mouse wheel is told from a trackpad per burst from evidence (notch values, fine and diagonal deltas, their rate) and leans to panning when unsure. Ctrl/⌘ + wheel always zooms, Alt + wheel does the other thing, Shift + wheel scrolls sideways.
+  - Space + drag pans, as do the middle button and Alt + drag; the click after a pan no longer changes the selection.
+  - The drawing cannot be panned out of sight.
+  
+  New options and methods: `wheelBehavior` (`'auto' | 'zoom' | 'pan'`) with `setWheelBehavior()`, and `leftDrag` (`'pan' | 'none'`) with `setLeftDrag()`. While moving, small labels are hidden with `visibility` instead of `display`, so a gesture no longer rebuilds their layout at its start and end.
+- 24ea510: A 3Dconnexion SpaceMouse drives every diagram on the page, alongside the mouse, through WebHID (Chrome / Edge, HTTPS or localhost): the cap pans and zooms the diagram under the pointer, Fit fits, Shift (held) slows it down. `connectSpaceMouse()` opens the browser's picker from a click; `attachSpaceMouse(camera)` lets the device drive a camera and opens a granted device again (also when re-plugged); `spaceMouseOffer()`, `spaceMouseConnected()` and `onSpaceMouseChange()` let a page show a Connect button, which over plain HTTP says that HTTPS is needed. Buttons are known for the SpaceMouse Pro family, the SpaceExplorer and the two-button models; others move with the cap only. The camera gains `isPointerOver()`.
+
+### Patch Changes
+
+- 570c86e: Name the relative placement the drawing solves: `layoutNetwork(model)` returns `{ scene, arrangement }`, where `Arrangement` lists each frame's children left to right with the rows they hold, by id, and `unmet`, the order hints the structure overrode. `drawNetwork` now reads `drawing.order` from the model itself (the `hints` option is gone), and `resolveNetwork` carries it through the merge, so the Editor and the Server draw one model the same way. An order list is sparse: `pinned` moves only the named children that are out of the asked order, each to just after the one named before it, so a drag no longer displaces untouched siblings. Redundancy sets may be named by their id. `NetworkModel.sources`, which nothing read or wrote, is removed.
+- 76f057e: Camera: `flyTo(nodeIds | 'fit')` flies smoothly to a set of nodes or back to the fit (van Wijk–Nuij path, eased; any input stops it; a jump under reduced motion), and `onUserMove(listener)` tells a host when a person, not its own calls, moved the view.
+- e909d25: The camera has `setTransform({ x, y, k })`, which sets translation and scale together. Restoring a view by `panTo` then `zoomTo` moved it, since `zoomTo` scales about the centre.
+- d5f9beb: Device attributes are configuration. A node's `address`, `sysName`, `chassisId` and `mac` and a
+  port's `mac` are fields of the network YAML (`inputModel.Node` / `Port`); `resolveNetwork` matches
+  nodes on them (and on a node's segment addresses) plus each source's own `vendorIds`, which stay in
+  the source's observation with a port's `ifIndex`. The `identity` field is gone from the observation
+  record, and the drawn graph (`Node`, `NodePort`, `Link`, `Subgraph`, `NetworkGraph`) carries no
+  `identity`, `provenance`, `entityId`, `attachments`, `metadata` or `exclusions`: `toNetworkGraph(model)`
+  takes no observation and `fromNetworkGraph(graph)` returns a `NetworkModel`. The graph-shaped
+  `resolve()` / `SnapshotEntry` / `ResolvedGraph`, `graphToSource`, `stampObserved` and
+  `deriveMappingFromGraph` are removed; `deriveMapping(graph, observation)`,
+  `effectivePolicyForNode(graph, observation, node)`, `nodeIdentityKeys(DeviceKeys)`,
+  `portIdentityKeys(PortKeys)`, `deviceKeysOfIdentity`, `segmentAddressesOf`, `deviceAttributes` and
+  `vendorIdsOf` replace them. `validateTopologyIdentityContract` reports `portsMissingName` instead of
+  `portsMissingIfName`. Topology plugins write the attributes on the nodes and ports they return.
+- 64a17e6: Draw networks that stopped the layout with "the constraints contain a cycle". A lone node in a group that holds no linked node now stands in the top row of the nearest group that does, so its group no longer reaches above a line that enters it. A line laid straight across between two boxes side by side is bent instead where the ports of a side leave its height no solution. Siblings whose rows overlap are no longer stacked one above the other. A port whose lines leave by two sides is drawn on each without stopping the renderer. A port held too near a line it cannot meet straight is moved off to the side that has room, instead of always the side it leans to.
+- 2399f57: A node's and a link's look follows from what it is, not from shapes or colours written on it. Every card is one rounded rectangle in the theme's colours, sized by its content: `NodeShape`, `NodeDrawing`, `NodeStyle` and `nodeContentScale` are gone, and the renderer drops its shape catalogue (`node-shape`), so `CardLook.frame` is one rectangle. A wire's colour is its VLAN's or the theme's, its width its speed's, its dash its kind's (virtual, assumed): `LinkStyle` is gone, `minLength` with it (nothing read it). The drawing layer keeps a node's icon, a link's label and type, a group's spec and padding, the settings and the order. `currentDrawing(drawing)` reads a drawing layer an older store kept as the drawing holds one today, dropping node shapes and styles, link styles and group colours; the storage codecs accept and drop the same.
+- 67b9c38: A group's look follows from the group, not from colours written on it. Each group takes one of the hues of the theme's new `groupTone`, picked by its id (`groupHueOf`), so a group of the same id is the same colour in every drawing and theme, a step further from the background with each depth: the drawing states each group's depth in the scene (`Scene.groups[].depth`), and `groupColors(tone, depth, hue)` gives the fill, edge and heading. Every hue at every depth, in light and dark, keeps the heading at 4.5:1 and the wires, card edges and ports at 3:1, stays fainter than a card's edge, and lies within 1.2:1 of the background, so the status and metric colours drawn on a group keep at least 83% of their contrast; six hues in either theme (`groupHues`, `groupHueCapacity`). `ThemeColors.groupSurfaces` (replacing `surfaces` and `SurfaceToken`) are the neutral surfaces by depth, for the page around a drawing. `SubgraphStyle` keeps only `padding`: a group's fill, stroke, dash and label placement are no longer read, and an older store's are accepted and dropped. The renderer's `groupLook` takes the depth and `KitColors.groupTone` replaces `group`. Core exports `colorDistance` and `OK_JND`. The light theme's line tone follows the new surfaces (lightness 0.61), and the line tone is held to every group fill.
+- eb1f58e: Balance the drawing: a box with room to spare now stands in the middle of it instead of at the left edge, and every box is drawn weakly towards the middle of the boxes it hands over to (and is handed over by).
+  
+  A switch with many terminals no longer draws them in one very wide row: a fan of more than six boxes folds into rows of at most five, the later rows one rank lower and standing under the first as one block.
+  
+  A group with no group inside it is now drawn compactly on its own and set into its parent as one box, so a wide group no longer spreads across the whole drawing.
+- 2db8b4e: Show port names the way a device prints them in its brief listings (`TenGigabitEthernet1/0/1` as `Te1/0/1`, `Ethernet1/49` as `Et1/49`). Only the chip text is shortened: the stored name never changes, and the full name is the port's tooltip (an SVG `<title>`). Names that would show alike within one box keep their full spelling, and the spacing of the ports follows the shown names, so boxes with long Cisco-, Arista- or H3C-style port names come out narrower.
+- bcefedd: When the names of the ports on one edge ask for more room than the edge may have, write the start they share once. `Metrics.portSides` may return a `caption` for an edge (the common prefix, cut at a token boundary: `Te1/0/`), and the scene lists it in `captions` with the corner the edge starts from. The renderer draws it as a bold chip at that corner and leaves it off each port's own chip; every port still carries its full `name`, which is its tooltip.
+- 3967c02: As the last resort for port names that still do not fit an edge, cut the front of the names (`…0/52`): one length for the whole edge, the longest that fits, lengthened while two names would read alike. A chip on a left or right edge is held to 14 characters. The port's tooltip keeps the full name.
+- 317dd26: Space ports by their neighbours instead of by the widest name in the box. `Metrics.portSlot(labels)` is replaced by `Metrics.portSides(box)`, which answers for each edge of a box the text of every chip, the least distance between each neighbouring pair (and a pair one apart), the margins at the ends and how far the names reach out. A top or bottom edge asks for half of each chip's width between neighbours; a left or right edge asks for the chip's height only, so a long name no longer stretches the side of a box. Scene ports now carry `name` (the stored name, in full) and `label` (what is written in the chip); the renderer draws `label` and puts `name` in the tooltip.
+- e5d6270: Set the port names of a long top or bottom edge in two rows when one row would widen the box. A port in `PortSideLayout` may stand in row 1, every other chip of the edge, and a pair two ports apart may ask for a distance of its own (`gaps` with `to - from` of 2). The scene's ports carry the `row`, and the renderer draws the outer row one chip farther out. A side's `depth` is now how far the outer edge of its outermost chip stands from the port; where that is more than the lead-out, the room between ranks, and between a box and the line that passes it, grows by the difference.
+- b7f7d80: Lines are drawn one and a half times as wide: each decade of speed adds a stroke and a half (1G at 4.5, 10G at 6, 100G at 7.5), so a drawing shrunk to fit still shows its lines and tells their speeds apart.
+- dc4b266: Draw link lines two strokes and a half wider per decade of speed (1G at 7.5, 10G at 10, 100G at
+  12.5), up from a stroke and a half (1G at 4.5, 10G at 6), so lines no longer sink among the frames
+  and the speeds are easier to tell apart.
+- Updated dependencies [e0f3f23]
+- Updated dependencies [2d11fb6]
+- Updated dependencies [570c86e]
+- Updated dependencies [60d6f2f]
+- Updated dependencies [d5f9beb]
+- Updated dependencies [64a17e6]
+- Updated dependencies [21975fc]
+- Updated dependencies [eafc704]
+- Updated dependencies [2399f57]
+- Updated dependencies [6a60133]
+- Updated dependencies [67b9c38]
+- Updated dependencies [eb1f58e]
+- Updated dependencies [b262fe4]
+- Updated dependencies [fea9b1c]
+- Updated dependencies [0cdb65b]
+- Updated dependencies [bcefedd]
+- Updated dependencies [317dd26]
+- Updated dependencies [e5d6270]
+- Updated dependencies [475ba09]
+- Updated dependencies [65cfb65]
+  - @shumoku/core@0.7.0
+
 ## 0.3.2
 
 ### Patch Changes
