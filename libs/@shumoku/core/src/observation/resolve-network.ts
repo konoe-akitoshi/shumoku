@@ -11,6 +11,7 @@ import type {
 } from '../models/network-model.js'
 import {
   type Attachment,
+  asEntityId,
   attachmentKey,
   type MembershipCriterion,
   type NodeExclusion,
@@ -99,6 +100,7 @@ export function resolveNetwork(
       network: project.network,
       ...(project.observation && { observation: project.observation }),
       ...(project.drawing && { drawing: project.drawing }),
+      ...(options.projectEntities && { entities: options.projectEntities }),
     },
   ]
   for (const snap of snapshots) {
@@ -506,11 +508,14 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   for (const c of contributions) {
     if (c.sourceId !== INTRINSIC) continue
     for (const node of c.network.nodes) {
+      const entityId = c.entities?.nodes[node.id]
       claim({
         sourceId: c.sourceId,
         priority: c.priority,
         capturedAt: c.capturedAt,
         ...viewOf(c, node),
+        ...(entityId && { entityId }),
+        ...(c.entities && { portEntities: c.entities.ports }),
       })
     }
   }
@@ -708,7 +713,13 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
   const ports = foldPortsAcrossCluster(cluster)
   if (ports.config.length > 0) config.ports = ports.config
 
+  // The registry entity the cluster is: members carrying an entity id are clustered by it, so
+  // they name one. Carried out so whoever keys on entities reads the merge's answer instead of
+  // looking the node up again.
+  const entityId = cluster.members.find((m) => m.entityId)?.entityId
+
   const observation: NodeObservationEntry = {
+    ...(entityId && { entityId: asEntityId(entityId) }),
     ...(vendorIds && { vendorIds }),
     ...(attachments.length > 0 && { attachments }),
     ...(suppressed.length > 0 && { suppressedAttachments: suppressed }),
@@ -942,7 +953,10 @@ function foldPortCluster(members: PortMember[]): {
     suppressed,
   )
   const ifIndex = pickField(ranked, (m) => m.observed?.ifIndex)
+  // the port entity, as the node's: ports carrying one are clustered by it
+  const entityId = members.find((m) => m.entityId)?.entityId
   const observation: PortObservation = {
+    ...(entityId && { entityId: asEntityId(entityId) }),
     ...(ifIndex && { ifIndex: ifIndex.value }),
     ...(attachments.length > 0 && { attachments }),
     ...(suppressed.length > 0 && { suppressedAttachments: suppressed }),

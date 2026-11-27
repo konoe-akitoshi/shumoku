@@ -23,6 +23,12 @@ export interface ResolveOptions {
    * topology-level scoping. Orthogonal to, and applied after, region scope.
    */
   scope?: ScopeFilter
+  /**
+   * Registry entity ids for the project's own nodes and ports, as a snapshot's `entities`. The
+   * project is registered like any source; with its entities the merge names every cluster's
+   * entity, the project's included, and nobody has to look a node up again afterwards.
+   */
+  projectEntities?: { nodes: Record<string, string>; ports: Record<string, string> }
 }
 
 /** Quality of identity binding — diagnostic, not load-bearing. */

@@ -146,3 +146,24 @@ test('clustering follows source priority, not the order the snapshots are listed
   expect(listedLowFirst.map((n) => n.label).sort()).toEqual(['h1', 'h2'])
   expect(listedHighFirst.map((n) => n.label).sort()).toEqual(['h1', 'h2'])
 })
+
+test('the registry entity each merged node and port is carries out of the merge', () => {
+  // two sources whose nodes share nothing but their entity: the registry said they are one
+  const source = (id: string, nodeId: string, address: string, port: string) => ({
+    sourceId: id,
+    capturedAt: 1,
+    status: 'ok' as const,
+    source: {
+      network: { nodes: [{ id: nodeId, address, ports: [{ name: port }] }], links: [] },
+    },
+    entities: { nodes: { [nodeId]: 'E-sw' }, ports: { [`${nodeId}:${port}`]: 'E-port' } },
+  })
+  const { model, observation } = resolveNetwork({ network: { nodes: [], links: [] } }, [
+    source('inventory', 'sw-a', '10.0.0.1', 'Ethernet1'),
+    source('controller', 'sw-b', '10.0.0.2', 'Ethernet1'),
+  ])
+  expect(model.config.nodes).toHaveLength(1)
+  const id = model.config.nodes[0]?.id ?? ''
+  expect(observation.nodes?.[id]?.entityId).toBe('E-sw')
+  expect(observation.nodes?.[id]?.ports?.['Ethernet1']?.entityId).toBe('E-port')
+})

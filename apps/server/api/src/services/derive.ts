@@ -24,6 +24,8 @@ import type { DeriveResult } from './topology.js'
 export interface DeriveRequest {
   /** The project's own contribution: its configuration, curation and drawing. */
   project: SourceNetwork
+  /** The registry's entities for the project's nodes and ports, as a snapshot's `entities`. */
+  projectEntities?: SourceSnapshot['entities']
   snapshots: SourceSnapshot[]
   scope?: ScopeFilter
   hideDisconnected: boolean
@@ -41,7 +43,10 @@ export function derive(
   onStage: (stage: 'resolve' | 'layout') => void = () => {},
 ): DeriveResult {
   onStage('resolve')
-  const resolved = resolveNetwork(req.project, req.snapshots, { scope: req.scope })
+  const resolved = resolveNetwork(req.project, req.snapshots, {
+    scope: req.scope,
+    ...(req.projectEntities && { projectEntities: req.projectEntities }),
+  })
   const observation = resolved.observation
   const model = nameUnnamed(resolved.model, observation)
   const resolvedGraph = toNetworkGraph(model)

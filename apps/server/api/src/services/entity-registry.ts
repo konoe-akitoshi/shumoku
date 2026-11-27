@@ -1105,29 +1105,6 @@ export function retireStaleEntities(
 // Public API - the entity ids of a resolved graph's elements (read-only registry access)
 // ---------------------------------------------------------------------------
 
-function lookupNodeEntityId(
-  topologyId: string,
-  keys: DeviceKeys,
-  db: Database,
-): EntityId | undefined {
-  const gathered = gatherNodeKeys(keys, '', '').filter((k) => !k.key.startsWith('manual:'))
-  if (gathered.length === 0) return undefined
-  const candidates = stagedLookupNode(topologyId, '', gathered, db)
-  return candidates[0]?.entityId
-}
-
-function lookupPortEntityId(
-  topologyId: string,
-  nodeEntityId: EntityId,
-  port: PortKeys,
-  db: Database,
-): EntityId | undefined {
-  const keys = gatherPortKeys(port, '').filter((k) => !k.key.startsWith('manual:'))
-  if (keys.length === 0) return undefined
-  const candidates = stagedLookupPort(topologyId, nodeEntityId, keys, db)
-  return candidates[0]?.entityId
-}
-
 function lookupLinkEntityId(
   topologyId: string,
   portAEntityId: EntityId,
@@ -1141,37 +1118,30 @@ function lookupLinkEntityId(
 }
 
 /**
- * The registry's entity ids for a resolved graph's nodes, ports and links, looked up by what each
- * element is recognized by: a node by its device attributes (`record.attributes`) and its sources'
- * ids (`record.observation`), a port by its name and `mac`, a link by its two ends (each its port
- * entity, or its node entity where the end names no port). Keyed
- * by the graph's element ids; an element the registry does not know is absent.
+ * The registry's entity ids for a resolved graph's nodes, ports and links. A node and a port are
+ * the entity the merge clustered them by (`record.observation`, carried out of `resolveNetwork`):
+ * the registry decided it when each source's element was registered, and it is not looked up again
+ * here. Looking it up again by the merged node's keys decided twice and could disagree (another
+ * candidate first, or no key at all for a node known by nothing but its source's id). A link is
+ * the entity registered for its two ends (each its port entity, or its node entity where the end
+ * names no port). Keyed by the graph's element ids; an element with no entity is absent.
  */
 export function stampEntityIds(
   topologyId: string,
   graph: NetworkGraph,
-  record: Pick<ResolvedRecord, 'observation' | 'attributes'>,
+  record: Pick<ResolvedRecord, 'observation'>,
   db: Database,
 ): ResolvedEntities {
   const entities: ResolvedEntities = { nodes: {}, ports: {}, links: {} }
+  const resolve = (id: string) => resolveAlias(asEntityId(id), db)
 
   for (const node of graph.nodes) {
     const observed = record.observation.nodes?.[node.id]
-    const nodeEntityId = lookupNodeEntityId(
-      topologyId,
-      { ...record.attributes[node.id], vendorIds: observed?.vendorIds },
-      db,
-    )
-    if (!nodeEntityId) continue
-    entities.nodes[node.id] = nodeEntityId
+    if (!observed?.entityId) continue
+    entities.nodes[node.id] = resolve(observed.entityId)
     for (const port of node.ports ?? []) {
-      const portEntityId = lookupPortEntityId(
-        topologyId,
-        nodeEntityId,
-        { name: port.id, ...(port.mac && { mac: port.mac }) },
-        db,
-      )
-      if (portEntityId) entities.ports[`${node.id}:${port.id}`] = portEntityId
+      const portEntityId = observed.ports?.[port.id]?.entityId
+      if (portEntityId) entities.ports[`${node.id}:${port.id}`] = resolve(portEntityId)
     }
   }
 

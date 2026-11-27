@@ -151,9 +151,11 @@ describe('metrics_mapping rows (Phase 2)', () => {
     expect(emitted).toBe(nodeAId)
   })
 
-  test('skipped counts stay honest (element with no stable entity id)', async () => {
+  test('a node written with no attributes is its registered entity, so its mapping is kept', async () => {
     const topo = await svc.create({ name: 'mm-skip' })
-    // A node with NO identity gets no entityId, so its mapping can't be keyed.
+    // A node the project writes with nothing it is recognized by is still registered (by the
+    // project's own id for it). The merge carries that entity out, so the mapping is keyed by it;
+    // looking the node up again by its attributes found nothing and dropped the mapping.
     const graph: NetworkGraph = {
       version: '1',
       name: 'mm-skip',
@@ -168,8 +170,8 @@ describe('metrics_mapping rows (Phase 2)', () => {
       nodes: { [nodeId]: { hostId: '1' } },
       links: {},
     })
-    expect(skipped.nodes).toBe(1)
-    expect(rowCount(topo.id)).toBe(0)
+    expect(skipped.nodes).toBe(0)
+    expect(rowCount(topo.id)).toBe(1)
   })
 
   test('a row from a detached metrics source stops driving the mapping', async () => {

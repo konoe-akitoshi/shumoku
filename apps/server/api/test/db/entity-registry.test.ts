@@ -554,7 +554,7 @@ describe('entity registry', () => {
       expect(link?.entityId).toBeTruthy()
     })
 
-    test('nodes without network identity get no entityId (manual fallback requires source)', () => {
+    test('a node the registry never saw gets no entityId', () => {
       const topologyId = makeTopology(db)
       const src = insertDataSource('netbox')
       attachSource(topologyId, src, 'topology')
@@ -565,7 +565,7 @@ describe('entity registry', () => {
         links: [],
       }
 
-      // stampEntityIds should NOT find an entity (manual key is source-scoped, stripped by stamp)
+      // nothing registered it, so the merge has no entity to carry out for it
       const stamped = stampGraph(topologyId, graphWithManual, db)
       expect(stamped.nodes[0]?.entityId).toBeUndefined()
     })

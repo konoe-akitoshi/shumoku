@@ -224,6 +224,8 @@ interface StoredLinkMapping {
 // 42: a switch stands centred over its access points (a fan head's uplink pulls weakly, and a
 // box is held straight to the middle of what it hands over to, not the first).
 // 43: two lines between the same two boxes stand in one order at both ends, so they do not cross.
+// 44: a node's and a port's entity is the one the merge clustered them by, not looked up again,
+// so a node known by nothing but its source's id keeps its entity.
 /**
  * Bumped whenever registration would give stored contributions entities they lack, so the startup
  * backfill registers them again (adopt-or-mint is idempotent). 2: a line whose end names no port is
@@ -232,7 +234,7 @@ interface StoredLinkMapping {
  */
 const REGISTRY_BACKFILL_VERSION = '2'
 
-const RESOLVER_VERSION = 43
+const RESOLVER_VERSION = 44
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -1581,6 +1583,7 @@ export class TopologyService {
    */
   collectDeriveInputs(topologyId: string): {
     project: SourceNetwork
+    projectEntities?: SourceSnapshot['entities']
     snapshots: SourceSnapshot[]
     scope?: ScopeFilter
     hideDisconnected: boolean
@@ -1640,8 +1643,10 @@ export class TopologyService {
     // fully-merged graph — never per-source. It is flat: degree 0 hides the
     // node, metrics-bound or not; the node reappears when any source observes
     // a link to it again.
+    const projectEntities = readEntityElements(topology.id, PROJECT_SOURCE, this.db)
     return {
       project,
+      ...(projectEntities && { projectEntities }),
       snapshots,
       scope: topology.scope,
       hideDisconnected: project.drawing?.settings?.hideDisconnected === true,
