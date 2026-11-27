@@ -41,6 +41,7 @@ import {
   registerBundledPlugins,
 } from './plugins/index.js'
 import { AlertCollector } from './services/alert-collector.js'
+import { createApiToken, listApiTokens, revokeApiToken } from './services/api-tokens.js'
 import {
   assertAuthenticationReady,
   bootstrapAdminAuthentication,
@@ -596,6 +597,11 @@ export class Server {
       system: { getBuildInfo, getSystemInfo },
       admin: { getStatus: () => this.getAdminStatus() },
       auth: createAuthApplicationService(),
+      apiTokens: {
+        list: listApiTokens,
+        create: createApiToken,
+        revoke: revokeApiToken,
+      },
       dataSources: {
         crud: createDataSourceCrudService(dataSourceService, topologyService, alertCollector),
         operations: createDataSourceOperationsService(dataSourceService, alertCollector),

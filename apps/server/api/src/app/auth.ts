@@ -1,3 +1,4 @@
+import { getApiTokenPrincipal } from '../services/api-tokens.js'
 import {
   checkRateLimit,
   clearAttempts,
@@ -17,6 +18,7 @@ export function createAuthApplicationService(): AuthApplicationService {
   return {
     isSetupComplete,
     getSessionPrincipal,
+    getApiTokenPrincipal,
     setPassword,
     setInitialPassword,
     verifyPassword,

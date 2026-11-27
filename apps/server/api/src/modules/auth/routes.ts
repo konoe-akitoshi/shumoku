@@ -5,7 +5,7 @@ import { SESSION_COOKIE } from '../../app/auth-session.js'
 import type { AppServices } from '../../app/services.js'
 import { ANONYMOUS_PRINCIPAL, hasPermission, permissionsForRole } from '../../auth/principal.js'
 import { isProxyAuthEnabled } from '../../auth/proxy-auth.js'
-import { resolveRequestPrincipal } from '../../auth/resolve-principal.js'
+import { resolveApiTokenPrincipal, resolveRequestPrincipal } from '../../auth/resolve-principal.js'
 import { isWebSetupEnabled } from '../../auth-config.js'
 import {
   apiErrorPayload,
@@ -125,9 +125,15 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
 
   app.openapi(statusRoute, (c) => {
     const setupComplete = service.isSetupComplete()
-    const activePrincipal = setupComplete
-      ? resolveRequestPrincipal(c.req.raw, service.getSessionPrincipal)
+    // The same order as authMiddleware: an API token first, then the session or proxy.
+    const tokenPrincipal = setupComplete
+      ? resolveApiTokenPrincipal(c.req.raw, service.getApiTokenPrincipal)
       : null
+    const activePrincipal =
+      tokenPrincipal === 'invalid'
+        ? null
+        : (tokenPrincipal ??
+          (setupComplete ? resolveRequestPrincipal(c.req.raw, service.getSessionPrincipal) : null))
     const principal = activePrincipal ?? ANONYMOUS_PRINCIPAL
     return c.json(
       {

@@ -19,6 +19,23 @@ Content-Type: application/json
 
 プロキシ認証と復旧手順は[認証ガイド](api-access.guide.ja.md)と[SSO導入手順](installation.guide.ja.md)を参照してください。プロキシ認証中はローカルのログイン・初期設定・パスワード変更を無効化し、`authMethod: proxy`を返します。
 
+### APIトークン
+
+Terraform・CI・スクリプトなどの自動操作には、管理者が発行するAPIトークンを使います。
+Settings画面の「API Tokens」、または`POST /api/admin/api-tokens`で、名前・ロール
+（`viewer` / `user` / `admin`）・有効期限を指定して発行します。トークン（`shmk_`で始まる値）は
+発行時のレスポンスに一度だけ含まれ、Serverはそのハッシュだけを保存します。
+
+```
+GET /api/topologies
+Authorization: Bearer shmk_...
+```
+
+トークンはロールに応じた権限を持ち、データソース・Credential・Settingsの操作には
+`admin`ロールが必要です。不要になったトークンはSettings画面か
+`DELETE /api/admin/api-tokens/:id`で失効させます。平文のHTTPでは送らず、HTTPSで
+公開したServerに対して使ってください。プロキシ認証中もAPIトークンは有効です。プロキシの手前で`Authorization: Bearer`付きのrequestをSSOへ転送せずServerへ通す設定（oauth2-proxyの`--skip-jwt-bearer-tokens`やrouteの除外など）にしてください。同じrequestにプロキシの身元とAPIトークンの両方がある場合はAPIトークンを使います。
+
 ### 開発時の自動操作
 
 リポジトリから`bun run dev:server`でServerを起動すると、ランチャーはAPIを
@@ -35,7 +52,7 @@ bun run dev:server:request -- GET /api/topologies/example/devices
 wrapperは標準の`Authorization: Bearer`方式を使用します。この認証経路は
 `NODE_ENV=development`でのみ有効で、APIのバインド先を`127.0.0.1`または`::1`に
 限定します。正規化後も`/api/*`内に留まるパスだけを受け付け、生成したcredentialを
-リモートのHTTP/HTTPS originへ送信しません。本番環境ではローカルセッションまたはプロキシ認証を利用します。
+リモートのHTTP/HTTPS originへ送信しません。本番環境の自動操作にはAPIトークンを利用します。
 プロキシ認証中は開発用credentialを無視します。credentialはAPI実行中のみgitignore済み・所有者限定のファイルへ
 保存され、終了時に削除されます。
 
@@ -45,7 +62,7 @@ APIを自動操作する場合は上記のServer全体のコマンドを使用�
 ### 機械可読な契約
 
 `GET /api/openapi.json`はOpenAPI 3.1契約を返します。管理エンドポイントと同じく、
-ローカルセッション・プロキシの身元・開発Bearerのいずれかと`workspace:read`権限が必要です。
+ローカルセッション・プロキシの身元・APIトークン・開発Bearerのいずれかと`workspace:read`権限が必要です。
 
 ```bash
 bun run dev:server:request -- GET /api/openapi.json

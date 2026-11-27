@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../app/services.js'
 import { createAdminApi } from '../modules/admin/routes.js'
+import { createApiTokensApi } from '../modules/api-tokens/routes.js'
 import { createAuthApi } from '../modules/auth/routes.js'
 import { createCredentialsApi } from '../modules/credentials/routes.js'
 import { createDashboardApi } from '../modules/dashboards/routes.js'
@@ -87,6 +88,7 @@ export function registerProtectedContractRoutes(app: OpenAPIHono, services: AppS
   app.route('/credentials', createCredentialsApi(services))
   app.route('/webhooks', createWebhookApi(services))
   app.route('/system', createSystemApi(services))
+  app.route('/admin/api-tokens', createApiTokensApi(services))
   app.route('/admin', createAdminApi(services))
 }
 

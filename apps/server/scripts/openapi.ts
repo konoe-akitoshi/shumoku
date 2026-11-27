@@ -16,6 +16,7 @@ const services: AppServices = {
   auth: {
     isSetupComplete: () => true,
     getSessionPrincipal: () => null,
+    getApiTokenPrincipal: () => null,
     setPassword: async () => undefined,
     setInitialPassword: async () => false,
     verifyPassword: async () => false,
@@ -25,6 +26,13 @@ const services: AppServices = {
     checkRateLimit: () => 0,
     recordFailedAttempt: () => undefined,
     clearAttempts: () => undefined,
+  },
+  apiTokens: {
+    list: () => [],
+    create: () => {
+      throw new Error('not-executed')
+    },
+    revoke: () => false,
   },
   system: {
     getBuildInfo: () => ({

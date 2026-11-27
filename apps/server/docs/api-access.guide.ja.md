@@ -12,7 +12,7 @@ related:
   - /ja/reference/server
 ---
 
-保護されたAPIは、ローカルSessionまたは明示的に有効化したプロキシ認証から解決されるprincipalと必要な権限を要求します。workspaceの読み取りは`workspace:read`、変更は`workspace:write`、データソース設定・Settings・管理診断は`admin:manage`が必要です。例外はhealth check、tokenでscopeされた共有route、Secretで認証するWebhookです。個々のrequest/responseは[生成Server API](/ja/reference/server)を参照してください。
+保護されたAPIは、ローカルSession、APIトークン、または明示的に有効化したプロキシ認証から解決されるprincipalと必要な権限を要求します。workspaceの読み取りは`workspace:read`、変更は`workspace:write`、データソース設定・Settings・管理診断は`admin:manage`が必要です。例外はhealth check、tokenでscopeされた共有route、Secretで認証するWebhookです。個々のrequest/responseは[生成Server API](/ja/reference/server)を参照してください。
 
 ## 初期認証
 
@@ -22,11 +22,15 @@ related:
 
 ## リバースプロキシSSO
 
-信頼境界と環境変数は[インストール手順](/ja/guides/server/installation)を参照してください。有効な間はローカルのログイン・初期設定・パスワード変更を無効化し、Cookieと開発用Bearerによるアクセスも許可しません。初回起動の管理者Secretは引き続き必要です。
+信頼境界と環境変数は[インストール手順](/ja/guides/server/installation)を参照してください。有効な間はローカルのログイン・初期設定・パスワード変更を無効化し、Cookieと開発用Bearerによるアクセスも許可しません（APIトークンは引き続き有効です）。初回起動の管理者Secretは引き続き必要です。
 
 `GET /api/auth/status`は`authMethod: proxy`と`proxy:`を付けたsubjectを返します。ロールヘッダー未設定時は既定で`viewer`、設定時は空・未対応のグループを拒否します。複数グループでは明示的に対応付けた最大のロールを採用します。保護APIで身元・グループが拒否されると401、認証済みでも必要な権限がない場合は403を返します。
 
 ログアウトは組織の認証基盤で行います。Shumokuのlogout endpointが削除するのはローカルSessionだけです。非常用のローカルログインでは接続元を制限し、プロキシ認証を無効にして再起動します。`authMethod`をenumで検証するクライアントは、有効化前に`proxy`へ対応してください。
+
+## APIトークン
+
+Terraform・CI・スクリプトには、管理者がSettings画面の「API Tokens」で発行するAPIトークンを`Authorization: Bearer`で送ります。トークンは発行時に一度だけ表示され、Serverはハッシュだけを保存します。権限は発行時に選んだロール（`viewer` / `user` / `admin`）に従います。有効期限を付け、不要になったら失効させてください。HTTPSで公開したServerにだけ送ります。プロキシ認証中もAPIトークンは有効で、プロキシが設定する身元headerには依存しません。プロキシでは`Authorization: Bearer`付きのrequestをSSOへ転送せずServerへ通してください。
 
 ## 開発時のAPI操作
 
@@ -36,7 +40,7 @@ related:
 bun run dev:server:request -- GET /api/topologies
 ```
 
-この経路はdevelopmentかつloopbackでのみ有効です。本番環境ではローカルSessionまたはプロキシ認証を利用します。プロキシ認証中は開発用Bearerを無視します。
+この経路はdevelopmentかつloopbackでのみ有効です。本番環境の自動操作にはAPIトークンを利用します。プロキシ認証中は開発用Bearerを無視します。
 
 ## 共有リンクとWebhook
 

@@ -12,8 +12,9 @@ import { authorizeRequest } from '../auth/access-policy.js'
 import { type AuthPrincipal, DEV_AUTOMATION_PRINCIPAL } from '../auth/principal.js'
 import { isProxyAuthEnabled } from '../auth/proxy-auth.js'
 import { setRequestPrincipal } from '../auth/request-principal.js'
-import { resolveRequestPrincipal } from '../auth/resolve-principal.js'
+import { resolveApiTokenPrincipal, resolveRequestPrincipal } from '../auth/resolve-principal.js'
 import { apiError, apiErrorPayload } from '../openapi/common.js'
+import { getApiTokenPrincipal } from '../services/api-tokens.js'
 import { getSessionPrincipal, isSetupComplete } from '../services/auth.js'
 
 const DEV_API_TOKEN_PATTERN = /^[a-f0-9]{64}$/i
@@ -119,6 +120,15 @@ export async function authMiddleware(c: Context, next: Next) {
     await next()
     return
   }
+
+  // API tokens issued by an administrator (Terraform, CI, scripts). An explicit token wins
+  // over a cookie or proxy identity on the same request, and is accepted in proxy mode too:
+  // it does not trust any header the proxy sets, so a request that bypasses the proxy gains
+  // nothing without a valid token. A `shmk_` credential is never tried as the dev
+  // credential: an unknown or expired token is simply refused.
+  const tokenPrincipal = resolveApiTokenPrincipal(c.req.raw, getApiTokenPrincipal)
+  if (tokenPrincipal === 'invalid') return apiError(c, 'Invalid or expired API token', 401)
+  if (tokenPrincipal) return authorizeAndContinue(c, next, tokenPrincipal)
 
   const principal = resolveRequestPrincipal(c.req.raw, getSessionPrincipal)
   if (principal) return authorizeAndContinue(c, next, principal)

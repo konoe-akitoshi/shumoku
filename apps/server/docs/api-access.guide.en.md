@@ -8,12 +8,12 @@ slug: server/api-access
 status: stable
 audience: operator
 owner: server
-canonicalDigest: 9ca66785ed158e0e9faf4778a49e142626773a648d21e1009068fe874e7df274
+canonicalDigest: 39b89ad2d77f0b931168f14eba898ab852e497fec7d1dbcc48211e481891b807
 related:
   - /en/reference/server
 ---
 
-Protected APIs require an authenticated principal with the appropriate permissions, resolved from a local session or opt-in trusted proxy headers. Workspace reads require `workspace:read`, mutations require `workspace:write`, and data-source configuration, settings, and administrator diagnostics require `admin:manage`. Exceptions are the health check, token-scoped share routes, and secret-authenticated webhooks. See the [generated Server API](/en/reference/server) for individual requests and responses.
+Protected APIs require an authenticated principal with the appropriate permissions, resolved from a local session, an API token, or opt-in trusted proxy headers. Workspace reads require `workspace:read`, mutations require `workspace:write`, and data-source configuration, settings, and administrator diagnostics require `admin:manage`. Exceptions are the health check, token-scoped share routes, and secret-authenticated webhooks. See the [generated Server API](/en/reference/server) for individual requests and responses.
 
 ## Bootstrap authentication
 
@@ -23,11 +23,15 @@ A fresh Server bound beyond loopback refuses to start without an administrator s
 
 ## Reverse-proxy SSO
 
-See [installation](/en/guides/server/installation) for the proxy trust boundary and environment variables. Proxy mode is exclusive: local login, setup, password changes, cookies, and development bearer credentials cannot grant access while it is enabled. The bootstrap administrator secret remains required for initial setup.
+See [installation](/en/guides/server/installation) for the proxy trust boundary and environment variables. Proxy mode is exclusive: local login, setup, password changes, cookies and development bearer credentials cannot grant access (API tokens still can) while it is enabled. The bootstrap administrator secret remains required for initial setup.
 
 `GET /api/auth/status` reports `authMethod: proxy` and a `proxy:`-prefixed subject. Without a role header, the default is `viewer`; with a role header, missing or unrecognized groups are denied. Multiple groups grant the highest mapped role. A denied request to a protected API receives 401; an authenticated identity without the required permission receives 403.
 
 Sign out through the organization's authentication provider. Shumoku's logout endpoint only clears local sessions. For emergency local login, restrict network access, disable proxy mode, and restart. Clients that exhaustively decode `authMethod` must support `proxy` before enabling this mode.
+
+## API tokens
+
+Terraform, CI and scripts send an API token as `Authorization: Bearer`; an administrator issues it under "API Tokens" on the Settings page. The token is shown once, when it is issued, and the Server stores only its hash. It has the role chosen when it was issued (`viewer` / `user` / `admin`). Give it an expiry and revoke it when it is no longer needed. Send it only to a Server served over HTTPS. API tokens stay valid in proxy mode and do not depend on any header the proxy sets; configure the proxy to pass requests carrying `Authorization: Bearer` through to the Server rather than redirecting them to SSO.
 
 ## Development API automation
 
@@ -37,7 +41,7 @@ Sign out through the organization's authentication provider. Shumoku's logout en
 bun run dev:server:request -- GET /api/topologies
 ```
 
-This route is available only in development on loopback. Production uses local sessions or opt-in proxy authentication. The development bearer credential is ignored in proxy mode.
+This route is available only in development on loopback. Production automation uses API tokens. The development bearer credential is ignored in proxy mode.
 
 ## Sharing and webhooks
 
