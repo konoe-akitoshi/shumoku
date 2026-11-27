@@ -34,3 +34,13 @@ POST /topologies/{topologyId}/sources/{sourceId}/observation removed the request
 # bulk `scope` (see openapi-compatibility-errors.txt).
 PATCH /topologies/{id}/discovery-policy removed the request property `attachments`
 PATCH /topologies/{id}/discovery-policy removed the request property `scope`
+
+# PR #959: intentional removal. The per-source node/link contribution modes have been vestigial
+# since migration 022 moved the merge method onto the topology (`compositionMode`): the API took
+# and returned them, but resolve never read them. Only the web UI's types named them.
+POST /topologies/{topologyId}/sources removed the request property `anyOf[subschema #1]/linkContribution`
+POST /topologies/{topologyId}/sources removed the request property `anyOf[subschema #1]/nodeContribution`
+PUT /topologies/{topologyId}/sources removed the request property `sources/items/linkContribution`
+PUT /topologies/{topologyId}/sources removed the request property `sources/items/nodeContribution`
+PUT /topologies/{topologyId}/sources/{sourceId} removed the request property `linkContribution`
+PUT /topologies/{topologyId}/sources/{sourceId} removed the request property `nodeContribution`
