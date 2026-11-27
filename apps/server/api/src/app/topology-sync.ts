@@ -31,19 +31,20 @@ export function createTopologySyncApplicationService(dependencies: {
       }
       const attached = sources.listByPurpose(id, 'topology')
       const pullable = await resolvePullableSourceIds(attached, dataSources)
-      if (rebuild) {
-        const refetchable = attached.filter((source) => pullable.has(source.dataSourceId))
-        for (const source of refetchable) {
-          observations.deleteForSource(id, source.dataSourceId)
-        }
-        topologies.clearCacheEntry(id)
-      }
-      const job = startSyncJob(id, attached, pullable, {
-        topologyService: topologies,
-        topologySourcesService: sources,
-        dataSourceService: dataSources,
-        observationsService: observations,
-      })
+      // A Rebuild re-fetches every source and draws again. It deletes nothing first: a source
+      // whose fetch fails keeps what it had (blanking first left it gone until the next sync).
+      const job = startSyncJob(
+        id,
+        attached,
+        pullable,
+        {
+          topologyService: topologies,
+          topologySourcesService: sources,
+          dataSourceService: dataSources,
+          observationsService: observations,
+        },
+        { rebuild },
+      )
       return job
         ? { ok: true, status: 202, value: { job: syncJobView(job) } }
         : failure(400, 'No topology sources attached')
